@@ -1,21 +1,11 @@
 #!/bin/bash
-echo "🚀 Initializing Git repository..."
-git init
+echo "⚙️ Configuring git pull strategy..."
+git config pull.rebase false
 
-echo "📦 Adding files..."
-git add .
-
-echo "💾 Committing changes..."
-git commit -m "feat: complete settings UI overhaul and profile vault"
-
-echo "🌿 Setting main branch..."
-git branch -M main
-
-echo "🔗 Connecting to remote repository..."
-git remote remove origin 2>/dev/null || true
-git remote add origin https://github.com/Travel-Booking-App-ITS-Global/admin.git
+echo "⬇️ Pulling from remote repository to merge remote changes..."
+git pull origin main --allow-unrelated-histories --no-edit
 
 echo "⬆️ Pushing code to GitHub..."
 git push -u origin main
 
-echo "✅ Done!"
+echo "✅ All done! Code successfully pulled and pushed."
