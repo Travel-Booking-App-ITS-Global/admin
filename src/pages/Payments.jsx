@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { RefreshCw, Download, CreditCard, Plus, Eye, LayoutGrid, List } from "lucide-react";
 import {
   PageHeader,
@@ -10,6 +10,8 @@ import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
 import { mockTransactions } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+import { exportToCSV } from "../utils/export.js";
+import { useLocation } from "react-router-dom";
 
 const PAYMENT_TAGS = [
   "UPI", "Credit Card", "Debit Card", "Net Banking", "Cash",
@@ -30,9 +32,22 @@ export default function Payments() {
   const { addToast } = useApp();
   const [transactions, setTransactions] = useState(mockTransactions);
   const [search, setSearch] = useState("");
+  const location = useLocation();
+
   const [tab, setTab] = useState("transactions");
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState("table"); // 'table' or 'grid'
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search");
+    if (q) {
+      setTimeout(() => {
+        setSearch(q);
+        setPage(1);
+      }, 0);
+    }
+  }, [location.search]);
 
   // Refund states
   const [refundOpen, setRefundOpen] = useState(false);
@@ -172,7 +187,10 @@ export default function Payments() {
             </button>
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => addToast("Exporting transactions…", "info")}
+              onClick={() => {
+                exportToCSV(filtered, "transactions_export.csv");
+                addToast("Transactions data exported to CSV!", "success");
+              }}
             >
               <Download size={14} /> Export
             </button>

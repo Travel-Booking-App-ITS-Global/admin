@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Eye, Download, XCircle, Plus, Edit, LayoutGrid, List } from "lucide-react";
 import {
   PageHeader,
@@ -10,6 +10,8 @@ import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
 import { mockFlightBookings } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+import { exportToCSV } from "../utils/export.js";
+import { useLocation } from "react-router-dom";
 
 const FLIGHT_TAGS = [
   "Domestic", "International", "Business", "Economy", "Leisure",
@@ -21,10 +23,23 @@ export default function Flights() {
   const { addToast } = useApp();
   const [bookings, setBookings] = useState(mockFlightBookings);
   const [search, setSearch] = useState("");
+  const location = useLocation();
+
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState("table"); // 'table' or 'grid'
   const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search");
+    if (q) {
+      setTimeout(() => {
+        setSearch(q);
+        setPage(1);
+      }, 0);
+    }
+  }, [location.search]);
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -162,7 +177,10 @@ export default function Flights() {
             </button>
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => addToast("Exporting flights…", "info")}
+              onClick={() => {
+                exportToCSV(filtered, "flights_bookings.csv");
+                addToast("Flights data exported to CSV!", "success");
+              }}
             >
               <Download size={14} /> Export
             </button>

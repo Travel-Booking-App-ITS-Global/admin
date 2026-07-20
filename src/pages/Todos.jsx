@@ -140,11 +140,18 @@ export default function Todos() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get("action") === "new") {
-      handleOpenAdd();
-      // Remove query parameters from URL cleanly
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
+    const hasNewAction = params.get("action") === "new";
+    const q = params.get("search");
+    setTimeout(() => {
+      if (hasNewAction) {
+        handleOpenAdd();
+        // Remove query parameters from URL cleanly
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      if (q) {
+        setSearch(q);
+      }
+    }, 0);
   }, [location.search]);
 
   useEffect(() => {

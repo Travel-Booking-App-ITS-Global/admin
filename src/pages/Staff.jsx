@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Shield,
   UserX,
@@ -11,6 +11,7 @@ import {
   Square,
   LayoutGrid,
   List,
+  Download,
 } from "lucide-react";
 import {
   PageHeader,
@@ -21,6 +22,8 @@ import {
 import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
 import { useApp } from "../store/AppContext.jsx";
+import { exportToCSV } from "../utils/export.js";
+import { useLocation } from "react-router-dom";
 
 const STAFF_TAGS = [
   "SuperAdmin", "IT Lead", "Finance", "Auditor", "CMS", "Editor",
@@ -189,9 +192,22 @@ export default function Staff() {
   const [logs, setLogs] = useState(initialLogs);
   const [tab, setTab] = useState("roster"); // "roster", "logs", "roles"
   const [search, setSearch] = useState("");
+  const location = useLocation();
+
   const [roleFilter, setRoleFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState("table"); // 'table' or 'grid'
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search");
+    if (q) {
+      setTimeout(() => {
+        setSearch(q);
+        setPage(1);
+      }, 0);
+    }
+  }, [location.search]);
 
   // Modal control states
   const [addOpen, setAddOpen] = useState(false);
@@ -453,9 +469,20 @@ export default function Staff() {
         subtitle="Onboard system administrators, configure dynamic feature permissions, and audit secure activity logs."
         actions={
           tab === "roster" && (
-            <button className="btn btn-primary btn-sm" onClick={handleOpenAdd}>
-              <Plus size={14} /> Onboard Staff Admin
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-primary btn-sm" onClick={handleOpenAdd}>
+                <Plus size={14} /> Onboard Staff Admin
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  exportToCSV(filteredStaff, "staff_roster.csv");
+                  addToast("Staff data exported to CSV!", "success");
+                }}
+              >
+                <Download size={14} /> Export
+              </button>
+            </div>
           )
         }
       />

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Edit, Trash2, LayoutGrid, List } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Edit, Trash2, LayoutGrid, List, Download } from "lucide-react";
 import {
   PageHeader,
   StatusBadge,
@@ -9,6 +9,8 @@ import {
 import Modal from "../components/ui/Modal.jsx";
 import { mockPackages } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+import { exportToCSV } from "../utils/export.js";
+import { useLocation } from "react-router-dom";
 
 const COMMON_INCLUSIONS = [
   "Hotel",
@@ -35,10 +37,23 @@ export default function Packages() {
   const { addToast } = useApp();
   const [packages, setPackages] = useState(mockPackages);
   const [search, setSearch] = useState("");
+  const location = useLocation();
+
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState("grid"); // 'grid' or 'table'
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search");
+    if (q) {
+      setTimeout(() => {
+        setSearch(q);
+        setPage(1);
+      }, 0);
+    }
+  }, [location.search]);
 
   // Unified form state with tags
   const [form, setForm] = useState({
@@ -192,9 +207,20 @@ export default function Packages() {
         title="Package Management"
         subtitle="Create and manage travel packages"
         actions={
-          <button className="btn btn-primary btn-sm" onClick={handleOpenCreate}>
-            <Plus size={14} /> Create Package
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-primary btn-sm" onClick={handleOpenCreate}>
+              <Plus size={14} /> Create Package
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                exportToCSV(filtered, "packages_export.csv");
+                addToast("Packages data exported to CSV!", "success");
+              }}
+            >
+              <Download size={14} /> Export
+            </button>
+          </div>
         }
       />
 

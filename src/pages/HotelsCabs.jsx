@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Eye, Star, MapPin, Plus, XCircle, CheckCircle, Edit, FileText, AlertTriangle, ShieldCheck, LayoutGrid, List } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Eye, Star, MapPin, Plus, XCircle, CheckCircle, Edit, FileText, AlertTriangle, ShieldCheck, LayoutGrid, List, Download } from "lucide-react";
 import {
   PageHeader,
   StatusBadge,
@@ -14,6 +14,8 @@ import {
   mockCabBookings,
 } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+import { exportToCSV } from "../utils/export.js";
+import { useLocation } from "react-router-dom";
 
 const HOTEL_TAGS = [
   "Luxury", "Budget", "Heritage", "Resort", "Business",
@@ -38,9 +40,22 @@ export function Hotels() {
   const { addToast } = useApp();
   const [hotelBookings, setHotelBookings] = useState(mockHotelBookings);
   const [search, setSearch] = useState("");
+  const location = useLocation();
+
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState("table"); // 'table' or 'grid'
   const [selected, setSelected] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search");
+    if (q) {
+      setTimeout(() => {
+        setSearch(q);
+        setPage(1);
+      }, 0);
+    }
+  }, [location.search]);
 
   // Manual Hotel booking states
   const [addOpen, setAddOpen] = useState(false);
@@ -161,9 +176,12 @@ export function Hotels() {
             </button>
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => addToast("Exporting hotels…", "info")}
+              onClick={() => {
+                exportToCSV(filtered, "hotels_bookings.csv");
+                addToast("Hotels data exported to CSV!", "success");
+              }}
             >
-              Export
+              <Download size={14} /> Export
             </button>
           </div>
         }
@@ -702,6 +720,7 @@ export function Cabs() {
   const [search, setSearch] = useState("");
   const [driverSearch, setDriverSearch] = useState("");
   const [vehicleSearch, setVehicleSearch] = useState("");
+  const location = useLocation();
 
   // Pagination states
   const [ridesPage, setRidesPage] = useState(1);
@@ -712,6 +731,29 @@ export function Cabs() {
   const [ridesViewMode, setRidesViewMode] = useState("table");
   const [driversViewMode, setDriversViewMode] = useState("table");
   const [vehiclesViewMode, setVehiclesViewMode] = useState("table");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab");
+    const q = params.get("search");
+    setTimeout(() => {
+      if (tabParam) {
+        setTab(tabParam);
+      }
+      if (q) {
+        if (tabParam === "drivers") {
+          setDriverSearch(q);
+          setDriversPage(1);
+        } else if (tabParam === "vehicles") {
+          setVehicleSearch(q);
+          setVehiclesPage(1);
+        } else {
+          setSearch(q);
+          setRidesPage(1);
+        }
+      }
+    }, 0);
+  }, [location.search]);
 
   // Detailed compliance drivers database with profile photos
   const [drivers, setDrivers] = useState([
@@ -1187,25 +1229,50 @@ export function Cabs() {
               </button>
               <button
                 className="btn btn-secondary btn-sm"
-                onClick={() => addToast("Exporting cab rides…", "info")}
+                onClick={() => {
+                  exportToCSV(filteredRides, "cab_bookings.csv");
+                  addToast("Cab bookings exported to CSV!", "success");
+                }}
               >
-                Export
+                <Download size={14} /> Export
               </button>
             </div>
           ) : tab === "drivers" ? (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleOpenAddDriverModal}
-            >
-              <Plus size={14} /> Add Driver
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleOpenAddDriverModal}
+              >
+                <Plus size={14} /> Add Driver
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  exportToCSV(filteredDrivers, "drivers_export.csv");
+                  addToast("Drivers list exported to CSV!", "success");
+                }}
+              >
+                <Download size={14} /> Export
+              </button>
+            </div>
           ) : (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleOpenAddVehicleModal}
-            >
-              <Plus size={14} /> Register Vehicle
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleOpenAddVehicleModal}
+              >
+                <Plus size={14} /> Register Vehicle
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  exportToCSV(filteredVehicles, "vehicles_export.csv");
+                  addToast("Vehicles list exported to CSV!", "success");
+                }}
+              >
+                <Download size={14} /> Export
+              </button>
+            </div>
           )
         }
       />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   UserCheck,
   UserX,
@@ -19,6 +19,8 @@ import {
 } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
+import { exportToCSV } from "../utils/export.js";
+import { useLocation } from "react-router-dom";
 
 const USER_TAGS = [
   "VIP", "Frequent Flyer", "Corporate", "Family Travel",
@@ -118,6 +120,19 @@ export default function Users() {
   const [viewMode, setViewMode] = useState("table"); // 'table' or 'grid'
   const [selected, setSelected] = useState(null);
   const [activeDetailTab, setActiveDetailTab] = useState("overview");
+
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search");
+    if (q) {
+      setTimeout(() => {
+        setSearch(q);
+        setPage(1);
+      }, 0);
+    }
+  }, [location.search]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState("create");
@@ -1195,7 +1210,10 @@ export default function Users() {
             </button>
             <button
               className="btn btn-secondary btn-sm"
-              onClick={() => addToast("Exporting users CSV…", "info")}
+              onClick={() => {
+                exportToCSV(filtered, "users_export.csv");
+                addToast("Users data exported to CSV!", "success");
+              }}
             >
               <Download size={14} /> Export CSV
             </button>

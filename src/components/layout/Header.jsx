@@ -2,6 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import * as LucideIcons from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  mockUsers,
+  mockFlightBookings,
+  mockHotelBookings,
+  mockCabBookings,
+  mockDrivers,
+  mockPackages,
+  mockTickets,
+  mockTransactions,
+  mockItineraries,
+  mockFAQs,
+  mockAPIConfigs,
+} from '../../data/mockData.js';
 
 const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
@@ -90,14 +103,245 @@ export default function Header() {
     }
   }, [isOpen]);
 
+  // Dynamic search function over mock database collections
+  const getDynamicResults = (q) => {
+    const cleanQ = q.trim().toLowerCase();
+    if (!cleanQ) return [];
+
+    const results = [];
+
+    // 1. Users
+    mockUsers.forEach((u) => {
+      if (
+        u.name.toLowerCase().includes(cleanQ) ||
+        u.email.toLowerCase().includes(cleanQ) ||
+        u.id.toLowerCase().includes(cleanQ) ||
+        u.phone.toLowerCase().includes(cleanQ) ||
+        (u.tags && u.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-user-${u.id}`,
+          title: `User: ${u.name} (${u.email})`,
+          category: "Users Directory",
+          path: `/users?search=${encodeURIComponent(u.name)}`,
+          icon: "Users",
+        });
+      }
+    });
+
+    // 2. Flight Bookings
+    mockFlightBookings.forEach((f) => {
+      if (
+        f.id.toLowerCase().includes(cleanQ) ||
+        f.user.toLowerCase().includes(cleanQ) ||
+        f.pnr.toLowerCase().includes(cleanQ) ||
+        f.from.toLowerCase().includes(cleanQ) ||
+        f.to.toLowerCase().includes(cleanQ) ||
+        f.airline.toLowerCase().includes(cleanQ) ||
+        (f.tags && f.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-flight-${f.id}`,
+          title: `Flight ${f.id}: ${f.from} ➔ ${f.to} (${f.user})`,
+          category: "Flight Bookings",
+          path: `/flights?search=${encodeURIComponent(f.id)}`,
+          icon: "Plane",
+        });
+      }
+    });
+
+    // 3. Hotel Bookings
+    mockHotelBookings.forEach((h) => {
+      if (
+        h.id.toLowerCase().includes(cleanQ) ||
+        h.user.toLowerCase().includes(cleanQ) ||
+        h.hotel.toLowerCase().includes(cleanQ) ||
+        h.city.toLowerCase().includes(cleanQ) ||
+        (h.tags && h.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-hotel-${h.id}`,
+          title: `Hotel ${h.id}: ${h.hotel}, ${h.city} (${h.user})`,
+          category: "Hotel Bookings",
+          path: `/hotels?search=${encodeURIComponent(h.id)}`,
+          icon: "Hotel",
+        });
+      }
+    });
+
+    // 4. Cab Bookings
+    mockCabBookings.forEach((c) => {
+      if (
+        c.id.toLowerCase().includes(cleanQ) ||
+        c.user.toLowerCase().includes(cleanQ) ||
+        c.driver.toLowerCase().includes(cleanQ) ||
+        c.vehicle.toLowerCase().includes(cleanQ) ||
+        c.pickup.toLowerCase().includes(cleanQ) ||
+        c.drop.toLowerCase().includes(cleanQ) ||
+        (c.tags && c.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-cab-${c.id}`,
+          title: `Cab ${c.id}: ${c.pickup} ➔ ${c.drop} (${c.user})`,
+          category: "Cab Bookings",
+          path: `/cabs?tab=rides&search=${encodeURIComponent(c.id)}`,
+          icon: "Car",
+        });
+      }
+    });
+
+    // 5. Drivers
+    mockDrivers.forEach((d) => {
+      if (
+        d.id.toLowerCase().includes(cleanQ) ||
+        d.name.toLowerCase().includes(cleanQ) ||
+        d.vehicle.toLowerCase().includes(cleanQ) ||
+        d.plate.toLowerCase().includes(cleanQ) ||
+        d.city.toLowerCase().includes(cleanQ) ||
+        (d.tags && d.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-driver-${d.id}`,
+          title: `Driver: ${d.name} (${d.plate}) - ${d.vehicle}`,
+          category: "Drivers Directory",
+          path: `/cabs?tab=drivers&search=${encodeURIComponent(d.name)}`,
+          icon: "User",
+        });
+      }
+    });
+
+    // 6. Travel Packages
+    mockPackages.forEach((p) => {
+      if (
+        p.id.toLowerCase().includes(cleanQ) ||
+        p.name.toLowerCase().includes(cleanQ) ||
+        p.category.toLowerCase().includes(cleanQ) ||
+        (p.destinations && p.destinations.some((dest) => dest.toLowerCase().includes(cleanQ))) ||
+        (p.tags && p.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-package-${p.id}`,
+          title: `Package: ${p.name} (${p.duration})`,
+          category: "Travel Packages",
+          path: `/packages?search=${encodeURIComponent(p.name)}`,
+          icon: "Package",
+        });
+      }
+    });
+
+    // 7. Support Tickets
+    mockTickets.forEach((t) => {
+      if (
+        t.id.toLowerCase().includes(cleanQ) ||
+        t.user.toLowerCase().includes(cleanQ) ||
+        t.subject.toLowerCase().includes(cleanQ) ||
+        t.category.toLowerCase().includes(cleanQ) ||
+        (t.tags && t.tags.some((tag) => tag.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-ticket-${t.id}`,
+          title: `Ticket ${t.id}: ${t.subject} (${t.user})`,
+          category: "Support Tickets",
+          path: `/support?search=${encodeURIComponent(t.id)}`,
+          icon: "Headphones",
+        });
+      }
+    });
+
+    // 8. Transactions
+    mockTransactions.forEach((t) => {
+      if (
+        t.id.toLowerCase().includes(cleanQ) ||
+        t.user.toLowerCase().includes(cleanQ) ||
+        t.type.toLowerCase().includes(cleanQ) ||
+        t.method.toLowerCase().includes(cleanQ) ||
+        t.gateway.toLowerCase().includes(cleanQ) ||
+        (t.tags && t.tags.some((tag) => tag.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-txn-${t.id}`,
+          title: `Txn ${t.id}: ${t.amount} ${t.type} via ${t.method} (${t.user})`,
+          category: "Transactions Ledger",
+          path: `/payments?search=${encodeURIComponent(t.id)}`,
+          icon: "CreditCard",
+        });
+      }
+    });
+
+    // 9. Itineraries
+    mockItineraries.forEach((i) => {
+      if (
+        i.id.toLowerCase().includes(cleanQ) ||
+        i.user.toLowerCase().includes(cleanQ) ||
+        i.title.toLowerCase().includes(cleanQ) ||
+        (i.tags && i.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-itinerary-${i.id}`,
+          title: `Itinerary: ${i.title} (${i.days} Days) - ${i.user}`,
+          category: "AI Itineraries",
+          path: `/itineraries`,
+          icon: "Compass",
+        });
+      }
+    });
+
+    // 10. FAQs
+    mockFAQs.forEach((f) => {
+      if (
+        f.question.toLowerCase().includes(cleanQ) ||
+        f.category.toLowerCase().includes(cleanQ) ||
+        (f.tags && f.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-faq-${f.id}`,
+          title: `FAQ: ${f.question}`,
+          category: "FAQs & CMS",
+          path: `/cms?tab=faqs`,
+          icon: "HelpCircle",
+        });
+      }
+    });
+
+    // 11. API Configs
+    mockAPIConfigs.forEach((a) => {
+      if (
+        a.id.toLowerCase().includes(cleanQ) ||
+        a.name.toLowerCase().includes(cleanQ) ||
+        a.provider.toLowerCase().includes(cleanQ) ||
+        a.type.toLowerCase().includes(cleanQ) ||
+        (a.tags && a.tags.some((t) => t.toLowerCase().includes(cleanQ)))
+      ) {
+        results.push({
+          id: `db-api-${a.id}`,
+          title: `API: ${a.name} (${a.provider})`,
+          category: "API & Configurations",
+          path: `/settings?tab=apis`,
+          icon: "Settings",
+        });
+      }
+    });
+
+    return results;
+  };
+
+  const cleanQ = query.trim().toLowerCase();
+
   // Filter commands based on search query
-  const filteredCommands = COMMANDS.filter((cmd) =>
-    cmd.title.toLowerCase().includes(query.toLowerCase()) ||
-    cmd.category.toLowerCase().includes(query.toLowerCase())
+  const filteredCommands = COMMANDS.filter(
+    (cmd) =>
+      cmd.title.toLowerCase().includes(cleanQ) ||
+      cmd.category.toLowerCase().includes(cleanQ)
   );
 
-  // Group commands by category for display
-  const groupedCommands = filteredCommands.reduce((acc, cmd) => {
+  // Get dynamic mock database search results
+  const dynamicResults = getDynamicResults(query);
+
+  // Combine static actions and database records
+  const allResults = [...filteredCommands, ...dynamicResults];
+
+  // Group combined results by category for display
+  const groupedCommands = allResults.reduce((acc, cmd) => {
     if (!acc[cmd.category]) acc[cmd.category] = [];
     acc[cmd.category].push(cmd);
     return acc;

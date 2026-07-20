@@ -1,10 +1,12 @@
-import { useState } from "react";
-import { MessageCircle, CheckCircle, User, Clock, AlertTriangle, Plus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MessageCircle, CheckCircle, User, Clock, AlertTriangle, Plus, Download } from "lucide-react";
 import { PageHeader, StatusBadge, TableFilters, Avatar } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
 import { mockTickets } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+import { exportToCSV } from "../utils/export.js";
+import { useLocation } from "react-router-dom";
 
 const SUPPORT_TAGS = [
   "Payment", "Urgent", "Flight", "Hotel", "Cab", "Refund",
@@ -18,6 +20,18 @@ export default function Support() {
   const { addToast } = useApp();
   const [tickets, setTickets] = useState(mockTickets);
   const [search, setSearch] = useState("");
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const q = params.get("search");
+    if (q) {
+      setTimeout(() => {
+        setSearch(q);
+      }, 0);
+    }
+  }, [location.search]);
+
   const [statusFilter, setStatusFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [replyText, setReplyText] = useState("");
@@ -142,9 +156,20 @@ export default function Support() {
         title="Support & Ticketing"
         subtitle="Customer support tickets and resolution workflow"
         actions={
-          <button className="btn btn-primary btn-sm" onClick={handleOpenAddModal}>
-            <Plus size={14} /> File Ticket
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-primary btn-sm" onClick={handleOpenAddModal}>
+              <Plus size={14} /> File Ticket
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                exportToCSV(filtered, "support_tickets.csv");
+                addToast("Support tickets exported to CSV!", "success");
+              }}
+            >
+              <Download size={14} /> Export
+            </button>
+          </div>
         }
       />
 
