@@ -6,7 +6,7 @@ import {
 import {
   FileText, Download, Filter, Users, Plane, Hotel,
   Car, Package, CreditCard, TrendingUp, Search,
-  ArrowUpRight, CheckCircle, XCircle, Clock, AlertTriangle,
+  CheckCircle, XCircle, Clock, AlertTriangle,
   ChevronDown, ChevronUp, RefreshCw
 } from 'lucide-react';
 import {
@@ -164,7 +164,7 @@ export default function Reports() {
       });
     }
     return r;
-  }, [tab, search, sortCol, sortDir, allRows]);
+  }, [search, sortCol, sortDir, allRows]);
 
   const columns = allRows.length ? Object.keys(allRows[0]) : [];
 
