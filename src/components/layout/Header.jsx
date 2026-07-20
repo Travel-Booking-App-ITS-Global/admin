@@ -82,17 +82,90 @@ export default function Header() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchInputRef = useRef(null);
 
-  // Keyboard shortcut for Cmd+K / Ctrl+K
+  // Help Center states
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [helpTab, setHelpTab] = useState('shortcuts'); // 'shortcuts' or 'faqs'
+  const [faqSearch, setFaqSearch] = useState('');
+  const [expandedFaq, setExpandedFaq] = useState(null);
+
+  // Notification states
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const notifRef = useRef(null);
+
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const stored = localStorage.getItem('itsglobal_notifications');
+      return stored ? JSON.parse(stored) : [
+        { id: 1, text: 'New booking FLT8825 created by Arjun Nair',    time: '2 min ago',  type: 'booking' },
+        { id: 2, text: 'Refund processed for TXN88223 - Rohit Verma',  time: '15 min ago', type: 'refund'  },
+        { id: 3, text: 'Support ticket TKT0095 opened – high priority', time: '32 min ago', type: 'ticket'  },
+        { id: 4, text: 'Driver Suresh Pillai went online in Kochi',     time: '1 hr ago',   type: 'driver'  },
+        { id: 5, text: 'Package PKG002 sold out, bookings paused',      time: '2 hrs ago',  type: 'package' },
+        { id: 6, text: 'MakeMyTrip Hotels API showing high latency',    time: '3 hrs ago',  type: 'alert'   },
+      ];
+    } catch {
+      return [];
+    }
+  });
+
+  const [unreadCount, setUnreadCount] = useState(() => {
+    try {
+      const stored = localStorage.getItem('itsglobal_notif_unread');
+      return stored ? parseInt(stored, 10) : 6;
+    } catch {
+      return 6;
+    }
+  });
+
+  // Save to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('itsglobal_notifications', JSON.stringify(notifications));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [notifications]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('itsglobal_notif_unread', unreadCount.toString());
+    } catch (e) {
+      console.error(e);
+    }
+  }, [unreadCount]);
+
+  // Click outside listener for notifications dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setIsNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Keyboard shortcut listeners: Ctrl+K / Ctrl+Shift+L / Ctrl+Shift+P
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setIsOpen((prev) => !prev);
       }
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        toggleTheme();
+        addToast(`Theme toggled`, 'success');
+      }
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        navigate('/settings');
+        addToast('Navigating to Profile Settings', 'info');
+      }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []);
+  }, [toggleTheme, navigate, addToast]);
 
   // Auto-focus search input when Spotlight opens
   useEffect(() => {
@@ -325,6 +398,71 @@ export default function Header() {
     return results;
   };
 
+  const handleNotifClick = (n) => {
+    setIsNotifOpen(false);
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+
+    if (n.text.includes('FLT')) {
+      navigate('/flights?search=FLT8825');
+      addToast('Navigating to Flight Booking FLT8825', 'info');
+    } else if (n.text.includes('TXN')) {
+      navigate('/payments?search=TXN88223');
+      addToast('Navigating to Transaction TXN88223', 'info');
+    } else if (n.text.includes('TKT')) {
+      navigate('/support?search=TKT0095');
+      addToast('Navigating to Support Ticket TKT0095', 'info');
+    } else if (n.text.includes('Driver')) {
+      navigate('/cabs?tab=drivers&search=Suresh');
+      addToast('Viewing Driver Suresh Pillai', 'info');
+    } else if (n.text.includes('Package') || n.text.includes('PKG')) {
+      navigate('/packages?search=PKG002');
+      addToast('Viewing Package PKG002', 'info');
+    } else if (n.text.includes('API')) {
+      navigate('/settings?tab=apis');
+      addToast('Checking API latency reports', 'warning');
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleDeleteNotif = (e, id) => {
+    e.stopPropagation();
+    setNotifications((prev) => prev.filter((item) => item.id !== id));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+    addToast('Notification dismissed', 'success');
+  };
+
+  const handleMarkAllRead = () => {
+    setUnreadCount(0);
+    addToast('All notifications marked as read', 'success');
+  };
+
+  const getNotifIcon = (type) => {
+    switch (type) {
+      case 'booking':
+        return <LucideIcons.Plane size={16} />;
+      case 'refund':
+        return <LucideIcons.RefreshCw size={16} />;
+      case 'ticket':
+        return <LucideIcons.Headphones size={16} />;
+      case 'driver':
+        return <LucideIcons.Car size={16} />;
+      case 'package':
+        return <LucideIcons.Package size={16} />;
+      case 'alert':
+        return <LucideIcons.AlertTriangle size={16} />;
+      default:
+        return <LucideIcons.Bell size={16} />;
+    }
+  };
+
+  const FAQ_ANSWERS = {
+    1: "To cancel a flight booking, navigate to the Flight Bookings module, search for the PNR or Booking ID, select the booking, and click the 'Cancel Booking' action. Refunds are processed based on the airline's cancellation policy.",
+    2: "Hotel booking refunds are typically processed within 5-7 business days from the cancellation date. The funds will be credited back to the original payment gateway/method used during transaction.",
+    3: "Yes, travel packages can be modified up to 48 hours prior to the departure date. To modify a package, navigate to the Package Management console, choose the user's booking, and apply the custom overrides.",
+    4: "Real-time cab tracking can be monitored via the Cabs module. Choose the active ride under the 'Rides' tab to view the driver's current coordinates, license plate details, and estimated time of arrival (ETA)."
+  };
+
   const cleanQ = query.trim().toLowerCase();
 
   // Filter commands based on search query
@@ -414,14 +552,81 @@ export default function Header() {
             {theme === 'dark' ? <LucideIcons.Sun size={18} /> : <LucideIcons.Moon size={18} />}
           </button>
 
-          <button className="header-icon-btn" title="Help">
+          <button 
+            className="header-icon-btn" 
+            title="Help Center"
+            onClick={() => setIsHelpOpen(true)}
+          >
             <LucideIcons.HelpCircle size={18} />
           </button>
 
-          <button className="header-icon-btn" title="Notifications">
-            <LucideIcons.Bell size={18} />
-            <span className="notif-dot" />
-          </button>
+          <div className="notif-dropdown-wrapper" ref={notifRef}>
+            <button 
+              className="header-icon-btn" 
+              title="Notifications"
+              onClick={() => setIsNotifOpen((prev) => !prev)}
+            >
+              <LucideIcons.Bell size={18} />
+              {unreadCount > 0 && <span className="notif-dot" />}
+            </button>
+
+            {isNotifOpen && (
+              <div className="notif-dropdown">
+                <div className="notif-header">
+                  <span className="notif-title">Notifications</span>
+                  {unreadCount > 0 && (
+                    <button className="notif-action-btn" onClick={handleMarkAllRead}>
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
+                <div className="notif-list">
+                  {notifications.length === 0 ? (
+                    <div className="notif-empty">
+                      <LucideIcons.BellOff size={24} style={{ opacity: 0.5, marginBottom: 4 }} />
+                      <span>No new notifications</span>
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div 
+                        key={n.id} 
+                        className="notif-item" 
+                        onClick={() => handleNotifClick(n)}
+                      >
+                        <div className="notif-item-left">
+                          <div className={`notif-item-icon-wrap ${n.type}`}>
+                            {getNotifIcon(n.type)}
+                          </div>
+                          <div>
+                            <div className="notif-item-text">{n.text}</div>
+                            <div className="notif-item-time">{n.time}</div>
+                          </div>
+                        </div>
+                        <button 
+                          className="notif-item-delete" 
+                          onClick={(e) => handleDeleteNotif(e, n.id)}
+                          title="Remove notification"
+                        >
+                          <LucideIcons.X size={12} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="notif-footer">
+                  <span 
+                    className="notif-footer-link" 
+                    onClick={() => { 
+                      setIsNotifOpen(false); 
+                      navigate('/settings?tab=apis'); 
+                    }}
+                  >
+                    View System Status & APIs
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
 
           {adminAvatar ? (
             <img
@@ -497,6 +702,137 @@ export default function Header() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Help Center Modal Overlay */}
+      {isHelpOpen && (
+        <div className="modal-overlay" onClick={() => setIsHelpOpen(false)}>
+          <div className="modal" style={{ maxWidth: 580 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title">Admin Portal Help Center</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  Keyboard shortcuts, system guides and FAQs
+                </p>
+              </div>
+              <button 
+                className="btn-close" 
+                onClick={() => setIsHelpOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+              >
+                <LucideIcons.X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ minHeight: 380 }}>
+              <div className="help-tabs">
+                <button 
+                  className={`help-tab-btn ${helpTab === 'shortcuts' ? 'active' : ''}`}
+                  onClick={() => setHelpTab('shortcuts')}
+                >
+                  Shortcuts & Commands
+                </button>
+                <button 
+                  className={`help-tab-btn ${helpTab === 'faqs' ? 'active' : ''}`}
+                  onClick={() => setHelpTab('faqs')}
+                >
+                  Quick FAQ Finder
+                </button>
+              </div>
+
+              {helpTab === 'shortcuts' ? (
+                <div className="help-shortcut-list">
+                  <div className="help-shortcut-item">
+                    <span className="help-shortcut-desc">Open Spotlight Search</span>
+                    <div className="help-shortcut-keys">
+                      <kbd className="help-kbd">Ctrl</kbd>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>+</span>
+                      <kbd className="help-kbd">K</kbd>
+                    </div>
+                  </div>
+                  <div className="help-shortcut-item">
+                    <span className="help-shortcut-desc">Toggle Theme (Light/Dark)</span>
+                    <div className="help-shortcut-keys">
+                      <kbd className="help-kbd">Ctrl</kbd>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>+</span>
+                      <kbd className="help-kbd">Shift</kbd>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>+</span>
+                      <kbd className="help-kbd">L</kbd>
+                    </div>
+                  </div>
+                  <div className="help-shortcut-item">
+                    <span className="help-shortcut-desc">Go to Profile settings</span>
+                    <div className="help-shortcut-keys">
+                      <kbd className="help-kbd">Ctrl</kbd>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>+</span>
+                      <kbd className="help-kbd">Shift</kbd>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>+</span>
+                      <kbd className="help-kbd">P</kbd>
+                    </div>
+                  </div>
+                  <div className="help-shortcut-item">
+                    <span className="help-shortcut-desc">Close Spotlight / Modals</span>
+                    <div className="help-shortcut-keys">
+                      <kbd className="help-kbd">ESC</kbd>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="help-faq-search">
+                    <LucideIcons.Search size={16} className="help-faq-search-icon" />
+                    <input
+                      type="text"
+                      className="help-faq-search-input"
+                      placeholder="Search FAQs by question or category..."
+                      value={faqSearch}
+                      onChange={(e) => setFaqSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="help-faq-accordion">
+                    {mockFAQs
+                      .filter(
+                        (faq) =>
+                          faq.question.toLowerCase().includes(faqSearch.trim().toLowerCase()) ||
+                          faq.category.toLowerCase().includes(faqSearch.trim().toLowerCase())
+                      )
+                      .map((faq) => (
+                        <div key={faq.id} className="help-faq-item">
+                          <button
+                            className="help-faq-question-btn"
+                            onClick={() => setExpandedFaq(expandedFaq === faq.id ? null : faq.id)}
+                          >
+                            <span>{faq.question}</span>
+                            {expandedFaq === faq.id ? <LucideIcons.ChevronUp size={16} /> : <LucideIcons.ChevronDown size={16} />}
+                          </button>
+                          {expandedFaq === faq.id && (
+                            <div className="help-faq-answer">
+                              {FAQ_ANSWERS[faq.id] || "For details on this FAQ, please contact customer support."}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    {mockFAQs.filter(
+                      (faq) =>
+                        faq.question.toLowerCase().includes(faqSearch.trim().toLowerCase()) ||
+                        faq.category.toLowerCase().includes(faqSearch.trim().toLowerCase())
+                    ).length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-muted)' }}>
+                        No matching FAQs found. Try searching for "flight" or "refund".
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setIsHelpOpen(false)}>
+                Dismiss
+              </button>
             </div>
           </div>
         </div>
