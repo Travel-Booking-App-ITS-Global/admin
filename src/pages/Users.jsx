@@ -18,6 +18,13 @@ import {
   Pagination,
 } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
+import TagSelector from "../components/ui/TagSelector.jsx";
+
+const USER_TAGS = [
+  "VIP", "Frequent Flyer", "Corporate", "Family Travel",
+  "Budget", "Luxury", "New User", "Regular", "Honeymoon",
+  "Disputed", "Blocked", "HolidayMaker",
+];
 import {
   mockUsers,
   mockFlightBookings,
@@ -120,6 +127,7 @@ export default function Users() {
     email: "",
     phone: "",
     status: "active",
+    tags: [],
   });
 
   const toggleBlockUser = (id, currentStatus) => {
@@ -159,7 +167,7 @@ export default function Users() {
 
   const handleOpenAddModal = () => {
     setFormMode("create");
-    setFormUser({ id: "", name: "", email: "", phone: "", status: "active" });
+    setFormUser({ id: "", name: "", email: "", phone: "", status: "active", tags: [] });
     setFormOpen(true);
   };
 
@@ -171,6 +179,7 @@ export default function Users() {
       email: user.email,
       phone: user.phone,
       status: user.status,
+      tags: user.tags || [],
     });
     setFormOpen(true);
   };
@@ -202,6 +211,7 @@ export default function Users() {
           .join("")
           .slice(0, 2)
           .toUpperCase(),
+        tags: formUser.tags || [],
       };
       setUsers((prev) => [newUser, ...prev]);
       addToast(`User ${formUser.name} created successfully!`, "success");
@@ -218,9 +228,12 @@ export default function Users() {
   };
 
   const filtered = users.filter((u) => {
+    const s = search.toLowerCase();
+    const matchesTags = u.tags && u.tags.some((tag) => tag.toLowerCase().includes(s));
     const matchSearch =
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase());
+      u.name.toLowerCase().includes(s) ||
+      u.email.toLowerCase().includes(s) ||
+      matchesTags;
     const matchStatus = statusFilter === "all" || u.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -344,6 +357,26 @@ export default function Users() {
             <div style={{ marginTop: 12 }}>
               <StatusBadge status={selected.status} />
             </div>
+            {selected.tags && selected.tags.length > 0 && (
+              <div style={{ display: "flex", gap: 6, justifyContent: "center", flexWrap: "wrap", marginTop: 14 }}>
+                {selected.tags.map((t) => (
+                  <span
+                    key={t}
+                    style={{
+                      fontSize: 10,
+                      background: "rgba(37, 99, 235, 0.08)",
+                      color: "var(--text-brand)",
+                      padding: "3px 8px",
+                      borderRadius: "6px",
+                      fontWeight: 600,
+                      border: "1px solid rgba(37, 99, 235, 0.15)",
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            )}
 
             <div
               style={{
@@ -1134,6 +1167,12 @@ export default function Users() {
                 <option value="blocked">Blocked</option>
               </select>
             </div>
+            <TagSelector
+              label="Tags"
+              value={formUser.tags || []}
+              onChange={(tags) => setFormUser((prev) => ({ ...prev, tags }))}
+              suggestions={USER_TAGS}
+            />
           </form>
         </Modal>
       </div>
@@ -1311,6 +1350,26 @@ export default function Users() {
                             >
                               {u.id}
                             </div>
+                            {u.tags && u.tags.length > 0 && (
+                              <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                {u.tags.map((t) => (
+                                  <span
+                                    key={t}
+                                    style={{
+                                      fontSize: 9,
+                                      background: "rgba(37, 99, 235, 0.08)",
+                                      color: "var(--text-brand)",
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                      fontWeight: 600,
+                                      border: "1px solid rgba(37, 99, 235, 0.15)",
+                                    }}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -1416,6 +1475,27 @@ export default function Users() {
                         <div>
                           <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{u.name}</div>
                           <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)" }}>{u.id}</div>
+                          {u.tags && u.tags.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                              {u.tags.map((t) => (
+                                <span
+                                  key={t}
+                                  style={{
+                                    fontSize: 9,
+                                    background: "rgba(139, 92, 246, 0.1)",
+                                    color: "var(--accent-600)",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontWeight: 700,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.02em",
+                                  }}
+                                >
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
@@ -1592,6 +1672,12 @@ export default function Users() {
               <option value="blocked">Blocked</option>
             </select>
           </div>
+          <TagSelector
+            label="Tags"
+            value={formUser.tags || []}
+            onChange={(tags) => setFormUser((prev) => ({ ...prev, tags }))}
+            suggestions={USER_TAGS}
+          />
         </form>
       </Modal>
     </div>

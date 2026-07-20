@@ -19,7 +19,14 @@ import {
   Pagination,
 } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
+import TagSelector from "../components/ui/TagSelector.jsx";
 import { useApp } from "../store/AppContext.jsx";
+
+const STAFF_TAGS = [
+  "SuperAdmin", "IT Lead", "Finance", "Auditor", "CMS", "Editor",
+  "Support Lead", "CustomerCare", "Operator", "Bookings",
+  "Shift-A", "Shift-B", "Shift-Night", "Remote",
+];
 
 // Initial staff database
 const initialStaff = [
@@ -32,6 +39,7 @@ const initialStaff = [
     status: "active",
     joined: "12 May 2024",
     lastActive: "Just now",
+    tags: ["SuperAdmin", "IT Lead"],
     permissions: {
       dashboard: true,
       bookings: true,
@@ -51,6 +59,7 @@ const initialStaff = [
     status: "active",
     joined: "18 Jun 2024",
     lastActive: "10 mins ago",
+    tags: ["Bookings", "Operator"],
     permissions: {
       dashboard: true,
       bookings: true,
@@ -70,6 +79,7 @@ const initialStaff = [
     status: "active",
     joined: "05 Aug 2024",
     lastActive: "2 hours ago",
+    tags: ["Support Lead", "CustomerCare"],
     permissions: {
       dashboard: true,
       bookings: false,
@@ -89,6 +99,7 @@ const initialStaff = [
     status: "active",
     joined: "11 Nov 2024",
     lastActive: "1 day ago",
+    tags: ["Finance", "Auditor"],
     permissions: {
       dashboard: true,
       bookings: false,
@@ -108,6 +119,7 @@ const initialStaff = [
     status: "inactive",
     joined: "22 Jan 2025",
     lastActive: "3 days ago",
+    tags: ["CMS", "Editor"],
     permissions: {
       dashboard: true,
       bookings: false,
@@ -192,6 +204,7 @@ export default function Staff() {
     email: "",
     phone: "",
     role: "Booking Manager",
+    tags: [],
     permissions: {
       dashboard: true,
       bookings: false,
@@ -291,6 +304,7 @@ export default function Staff() {
       email: "",
       phone: "",
       role: "Booking Manager",
+      tags: [],
       permissions: {
         dashboard: true,
         bookings: true,
@@ -320,6 +334,7 @@ export default function Staff() {
       status: "active",
       joined: "Today",
       lastActive: "Never",
+      tags: formStaff.tags || [],
       permissions: formStaff.permissions,
     };
 
@@ -372,6 +387,7 @@ export default function Staff() {
     setFormStaff({
       ...formStaff,
       role: member.role,
+      tags: member.tags || [],
       permissions: { ...member.permissions },
     });
     setPermissionsOpen(true);
@@ -397,6 +413,7 @@ export default function Staff() {
           return {
             ...member,
             role: formStaff.role,
+            tags: formStaff.tags || [],
             permissions: formStaff.permissions,
           };
         }
@@ -410,10 +427,13 @@ export default function Staff() {
 
   // Filter roster
   const filteredStaff = staffList.filter((member) => {
+    const s = search.toLowerCase();
+    const matchesTags = member.tags && member.tags.some((tag) => tag.toLowerCase().includes(s));
     const matchesSearch =
-      member.name.toLowerCase().includes(search.toLowerCase()) ||
-      member.email.toLowerCase().includes(search.toLowerCase()) ||
-      member.id.toLowerCase().includes(search.toLowerCase());
+      member.name.toLowerCase().includes(s) ||
+      member.email.toLowerCase().includes(s) ||
+      member.id.toLowerCase().includes(s) ||
+      matchesTags;
     const matchesRole = roleFilter === "all" || member.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -643,6 +663,26 @@ export default function Staff() {
                                 >
                                   {member.email}
                                 </span>
+                                {member.tags && member.tags.length > 0 && (
+                                  <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                    {member.tags.map((t) => (
+                                      <span
+                                        key={t}
+                                        style={{
+                                          fontSize: 9,
+                                          background: "rgba(37, 99, 235, 0.08)",
+                                          color: "var(--text-brand)",
+                                          padding: "2px 6px",
+                                          borderRadius: "4px",
+                                          fontWeight: 600,
+                                          border: "1px solid rgba(37, 99, 235, 0.15)",
+                                        }}
+                                      >
+                                        {t}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -784,6 +824,27 @@ export default function Staff() {
                             >
                               {member.id}
                             </div>
+                            {member.tags && member.tags.length > 0 && (
+                              <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                {member.tags.map((t) => (
+                                  <span
+                                    key={t}
+                                    style={{
+                                      fontSize: 9,
+                                      background: "rgba(139, 92, 246, 0.1)",
+                                      color: "var(--accent-600)",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      fontWeight: 700,
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.02em",
+                                    }}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <StatusBadge
@@ -1233,6 +1294,13 @@ export default function Staff() {
             </select>
           </div>
 
+          <TagSelector
+            label="Tags"
+            value={formStaff.tags || []}
+            onChange={(tags) => setFormStaff({ ...formStaff, tags })}
+            suggestions={STAFF_TAGS}
+          />
+
           <div
             style={{
               borderTop: "1px solid var(--border-default)",
@@ -1357,6 +1425,13 @@ export default function Staff() {
               <option value="CMS Manager">CMS Manager (CMS Editor)</option>
             </select>
           </div>
+
+          <TagSelector
+            label="Tags"
+            value={formStaff.tags || []}
+            onChange={(tags) => setFormStaff({ ...formStaff, tags })}
+            suggestions={STAFF_TAGS}
+          />
 
           <div
             style={{

@@ -7,8 +7,15 @@ import {
   Pagination,
 } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
+import TagSelector from "../components/ui/TagSelector.jsx";
 import { mockTransactions } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+
+const PAYMENT_TAGS = [
+  "UPI", "Credit Card", "Debit Card", "Net Banking", "Cash",
+  "Domestic", "International", "Refunded", "Disputed", "Manual Entry",
+  "Urgent", "High Value", "Pending",
+];
 
 const METHOD_ICON = {
   UPI: "📱",
@@ -46,16 +53,21 @@ export default function Payments() {
     method: "UPI",
     gateway: "Razorpay",
     status: "success",
+    tags: [],
   });
 
   const refundable = transactions.filter((t) => t.status === "success");
 
-  const filtered = transactions.filter(
-    (t) =>
-      t.id.toLowerCase().includes(search.toLowerCase()) ||
-      t.user.toLowerCase().includes(search.toLowerCase()) ||
-      t.type.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = transactions.filter((t) => {
+    const s = search.toLowerCase();
+    const matchesTags = t.tags && t.tags.some((tag) => tag.toLowerCase().includes(s));
+    return (
+      t.id.toLowerCase().includes(s) ||
+      t.user.toLowerCase().includes(s) ||
+      t.type.toLowerCase().includes(s) ||
+      matchesTags
+    );
+  });
 
   const perPage = 10;
   const totalPages = Math.ceil(filtered.length / perPage) || 1;
@@ -70,6 +82,7 @@ export default function Payments() {
       method: "UPI",
       gateway: "Razorpay",
       status: "success",
+      tags: [],
     });
     setAddTxnOpen(true);
   };
@@ -91,6 +104,7 @@ export default function Payments() {
       method: formTxn.method,
       gateway: formTxn.gateway,
       status: formTxn.status,
+      tags: formTxn.tags || [],
       date: new Date().toLocaleString("en-IN", {
         day: "numeric",
         month: "short",
@@ -285,7 +299,27 @@ export default function Payments() {
                           {t.id}
                         </td>
                         <td style={{ fontWeight: 500, fontSize: 13 }}>
-                          {t.user}
+                          <div>{t.user}</div>
+                          {t.tags && t.tags.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                              {t.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  style={{
+                                    fontSize: 9,
+                                    background: "rgba(37, 99, 235, 0.08)",
+                                    color: "var(--text-brand)",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontWeight: 600,
+                                    border: "1px solid rgba(37, 99, 235, 0.15)",
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td>
                           <span
@@ -363,6 +397,27 @@ export default function Payments() {
                       <div>
                         <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "var(--brand-600)" }}>{t.id}</div>
                         <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: "var(--text-primary)" }}>{t.user}</div>
+                        {t.tags && t.tags.length > 0 && (
+                          <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                            {t.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                style={{
+                                  fontSize: 9,
+                                  background: "rgba(139, 92, 246, 0.1)",
+                                  color: "var(--accent-600)",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.02em",
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <StatusBadge status={t.status} />
                     </div>
@@ -628,6 +683,12 @@ export default function Payments() {
               <option value="pending">Pending</option>
             </select>
           </div>
+          <TagSelector
+            label="Tags"
+            value={formTxn.tags || []}
+            onChange={(tags) => setFormTxn({ ...formTxn, tags })}
+            suggestions={PAYMENT_TAGS}
+          />
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
             <button
               type="button"

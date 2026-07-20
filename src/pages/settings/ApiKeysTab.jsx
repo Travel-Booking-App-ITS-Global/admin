@@ -10,6 +10,7 @@ const initialApiKeys = [
     provider: "Razorpay",
     value: "rzp_live_abcd1234efgh5678",
     hidden: true,
+    tags: ["Payment", "Production"],
   },
   {
     id: "KEY002",
@@ -17,6 +18,7 @@ const initialApiKeys = [
     provider: "Stripe",
     value: "sk_live_51NvXYZabc1237890",
     hidden: true,
+    tags: ["Payment", "Production"],
   },
   {
     id: "KEY003",
@@ -24,6 +26,7 @@ const initialApiKeys = [
     provider: "Google",
     value: "AIzaSyA1234567890-bcdefg",
     hidden: true,
+    tags: ["Maps", "Development"],
   },
   {
     id: "KEY004",
@@ -31,6 +34,7 @@ const initialApiKeys = [
     provider: "Firebase",
     value: "AAAA1234567890:APA91b-xyz",
     hidden: true,
+    tags: ["Auth", "Production"],
   },
   {
     id: "KEY005",
@@ -38,6 +42,7 @@ const initialApiKeys = [
     provider: "Amadeus",
     value: "amadeus_secret_9988776655",
     hidden: true,
+    tags: ["Flights", "Development"],
   },
 ];
 
@@ -50,6 +55,7 @@ export default function ApiKeysTab() {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyProvider, setNewKeyProvider] = useState("Razorpay");
   const [newKeyValue, setNewKeyValue] = useState("");
+  const [newKeyTags, setNewKeyTags] = useState("");
 
   // Edit Modal States
   const [editKeyOpen, setEditKeyOpen] = useState(false);
@@ -57,6 +63,13 @@ export default function ApiKeysTab() {
   const [editKeyName, setEditKeyName] = useState("");
   const [editKeyProvider, setEditKeyProvider] = useState("");
   const [editKeyValue, setEditKeyValue] = useState("");
+  const [editKeyTags, setEditKeyTags] = useState("");
+
+  // Search/Filter states
+  const [keysSearchTerm, setKeysSearchTerm] = useState("");
+  const [activeKeyFilter, setActiveKeyFilter] = useState("All");
+  const keysFilterTags = ["All", "Payment", "Maps", "Auth", "Flights", "Production", "Development"];
+
 
   const handleAddKey = (e) => {
     e.preventDefault();
@@ -64,17 +77,22 @@ export default function ApiKeysTab() {
       addToast("Please fill out Key Name and Key Value", "error");
       return;
     }
+    const parsedTags = newKeyTags
+      ? newKeyTags.split(",").map((t) => t.trim()).filter(Boolean)
+      : [];
     const added = {
       id: `KEY${Date.now()}`,
       name: newKeyName,
       provider: newKeyProvider,
       value: newKeyValue,
       hidden: true,
+      tags: parsedTags,
     };
     setApiKeys((prev) => [...prev, added]);
     addToast(`${newKeyName} added successfully!`, "success");
     setNewKeyName("");
     setNewKeyValue("");
+    setNewKeyTags("");
     setAddKeyOpen(false);
   };
 
@@ -83,6 +101,7 @@ export default function ApiKeysTab() {
     setEditKeyName(key.name);
     setEditKeyProvider(key.provider);
     setEditKeyValue(key.value);
+    setEditKeyTags(key.tags ? key.tags.join(", ") : "");
     setEditKeyOpen(true);
   };
 
@@ -92,6 +111,9 @@ export default function ApiKeysTab() {
       addToast("Please fill out Key Name and Key Value", "error");
       return;
     }
+    const parsedTags = editKeyTags
+      ? editKeyTags.split(",").map((t) => t.trim()).filter(Boolean)
+      : [];
     setApiKeys((prev) =>
       prev.map((k) =>
         k.id === editingKeyId
@@ -100,6 +122,7 @@ export default function ApiKeysTab() {
               name: editKeyName,
               provider: editKeyProvider,
               value: editKeyValue,
+              tags: parsedTags,
             }
           : k
       )
@@ -107,7 +130,17 @@ export default function ApiKeysTab() {
     addToast(`${editKeyName} updated successfully!`, "success");
     setEditKeyOpen(false);
     setEditingKeyId(null);
+    setEditKeyTags("");
   };
+
+  const filteredApiKeys = apiKeys.filter((key) => {
+    const matchesSearch = key.name.toLowerCase().includes(keysSearchTerm.toLowerCase()) || 
+                          key.provider.toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
+                          (key.tags && key.tags.some(t => t.toLowerCase().includes(keysSearchTerm.toLowerCase())));
+    const matchesFilter = activeKeyFilter === "All" || (key.tags && key.tags.includes(activeKeyFilter));
+    return matchesSearch && matchesFilter;
+  });
+
 
   const toggleKeyVisibility = (id) => {
     setApiKeys((prev) =>
@@ -170,7 +203,82 @@ export default function ApiKeysTab() {
             gap: 12,
           }}
         >
-          {apiKeys.map((key) => (
+          {/* Search & Tags Filters */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 6 }}>
+            <div style={{ position: "relative" }}>
+              <input
+                type="text"
+                placeholder="Search keys by name, provider, or tag..."
+                value={keysSearchTerm}
+                onChange={(e) => setKeysSearchTerm(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px 8px 32px",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-default)",
+                  background: "var(--bg-card)",
+                  color: "var(--text-primary)",
+                  fontSize: 13,
+                  outline: "none",
+                }}
+              />
+              <span
+                style={{
+                  position: "absolute",
+                  left: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: 13,
+                  opacity: 0.6,
+                }}
+              >
+                🔍
+              </span>
+            </div>
+
+            {/* Quick Tag Pills */}
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              {keysFilterTags.map((tag) => {
+                const isActive = activeKeyFilter === tag;
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setActiveKeyFilter(tag)}
+                    style={{
+                      border: "none",
+                      padding: "4px 10px",
+                      borderRadius: "var(--radius-full)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      background: isActive ? "var(--brand-500)" : "var(--bg-hover)",
+                      color: isActive ? "#fff" : "var(--text-secondary)",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--text-muted)",
+              display: "flex",
+              justifyContent: "space-between",
+              marginBottom: 4,
+            }}
+          >
+            <span>Showing {filteredApiKeys.length} of {apiKeys.length} Keys</span>
+            {activeKeyFilter !== "All" && <span>Filtered by: {activeKeyFilter}</span>}
+          </div>
+
+          {filteredApiKeys.map((key) => (
             <div
               key={key.id}
               style={{
@@ -189,6 +297,7 @@ export default function ApiKeysTab() {
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
+                    flexWrap: "wrap",
                   }}
                 >
                   <span style={{ fontSize: 13, fontWeight: 700 }}>
@@ -206,6 +315,24 @@ export default function ApiKeysTab() {
                   >
                     {key.provider}
                   </span>
+                  
+                  {/* Render Tags */}
+                  {key.tags && key.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      style={{
+                        fontSize: 9,
+                        background: "rgba(var(--brand-500-rgb, 59, 130, 246), 0.08)",
+                        color: "var(--brand-500)",
+                        padding: "1px 6px",
+                        borderRadius: "4px",
+                        fontWeight: 700,
+                        border: "1px solid rgba(var(--brand-500-rgb, 59, 130, 246), 0.15)",
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
                 </div>
                 <div
                   style={{
@@ -280,16 +407,19 @@ export default function ApiKeysTab() {
               </div>
             </div>
           ))}
-          {apiKeys.length === 0 && (
+          {filteredApiKeys.length === 0 && (
             <div
               style={{
                 textAlign: "center",
                 padding: "24px 0",
                 color: "var(--text-muted)",
                 fontSize: 13,
+                border: "1px dashed var(--border-default)",
+                borderRadius: "var(--radius-md)",
+                background: "var(--bg-hover)",
               }}
             >
-              No API Keys configured. Click "+ Add API Key" to add one.
+              No API Keys found matching the search/filter criteria.
             </div>
           )}
         </div>
@@ -346,6 +476,17 @@ export default function ApiKeysTab() {
                 required
               />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Tags (comma-separated)</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. Payment, Production, Live"
+              value={newKeyTags}
+              onChange={(e) => setNewKeyTags(e.target.value)}
+            />
           </div>
 
           <div
@@ -421,6 +562,17 @@ export default function ApiKeysTab() {
                 required
               />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Tags (comma-separated)</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. Payment, Production, Live"
+              value={editKeyTags}
+              onChange={(e) => setEditKeyTags(e.target.value)}
+            />
           </div>
 
           <div

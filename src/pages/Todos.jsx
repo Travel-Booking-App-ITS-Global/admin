@@ -16,7 +16,14 @@ import {
 } from "lucide-react";
 import { PageHeader, StatusBadge, Avatar } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
+import TagSelector from "../components/ui/TagSelector.jsx";
 import { useApp } from "../store/AppContext.jsx";
+
+const TODO_TAGS = [
+  "Urgent", "Bug", "API", "Critical", "Finance", "Refund",
+  "CMS", "Package", "Driver", "Onboarding", "Escalation",
+  "Cab", "Support", "Review", "Blocked",
+];
 
 const INITIAL_TODOS = [
   {
@@ -30,6 +37,7 @@ const INITIAL_TODOS = [
     dueDate: "2025-07-20",
     assignedTo: "Aarush Singhania",
     created: "2025-07-15",
+    tags: ["API", "Critical"],
   },
   {
     id: "TSK002",
@@ -42,6 +50,7 @@ const INITIAL_TODOS = [
     dueDate: "2025-07-18",
     assignedTo: "Devansh Dixit",
     created: "2025-07-16",
+    tags: ["Refund", "Razorpay"],
   },
   {
     id: "TSK003",
@@ -54,6 +63,7 @@ const INITIAL_TODOS = [
     dueDate: "2025-07-25",
     assignedTo: "Riya Sen",
     created: "2025-07-12",
+    tags: ["CMS", "Package"],
   },
   {
     id: "TSK004",
@@ -66,6 +76,7 @@ const INITIAL_TODOS = [
     dueDate: "2025-07-30",
     assignedTo: "Anjali Mehta",
     created: "2025-07-17",
+    tags: ["Driver", "Onboarding"],
   },
   {
     id: "TSK005",
@@ -78,6 +89,7 @@ const INITIAL_TODOS = [
     dueDate: "2025-07-17",
     assignedTo: "Rohan Das",
     created: "2025-07-17",
+    tags: ["Escalation", "Cab"],
   },
 ];
 
@@ -121,6 +133,7 @@ export default function Todos() {
     status: "pending",
     dueDate: "",
     assignedTo: "Super Admin",
+    tags: [],
   });
 
   const location = useLocation();
@@ -206,6 +219,7 @@ export default function Todos() {
       status: "pending",
       dueDate: today,
       assignedTo: "Super Admin",
+      tags: [],
     });
     setModalOpen(true);
   }
@@ -247,10 +261,13 @@ export default function Todos() {
 
   // Filtering
   const filteredTodos = todos.filter((t) => {
+    const s = search.toLowerCase();
+    const matchesTags = t.tags && t.tags.some((tag) => tag.toLowerCase().includes(s));
     const matchSearch =
-      t.title.toLowerCase().includes(search.toLowerCase()) ||
-      t.description.toLowerCase().includes(search.toLowerCase()) ||
-      t.assignedTo.toLowerCase().includes(search.toLowerCase());
+      t.title.toLowerCase().includes(s) ||
+      t.description.toLowerCase().includes(s) ||
+      t.assignedTo.toLowerCase().includes(s) ||
+      matchesTags;
 
     const matchStatus = statusFilter === "all" || t.status === statusFilter;
     const matchPriority =
@@ -530,6 +547,26 @@ export default function Todos() {
                             >
                               {todo.description}
                             </div>
+                            {todo.tags && todo.tags.length > 0 && (
+                              <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                                {todo.tags.map((tag) => (
+                                  <span
+                                    key={tag}
+                                    style={{
+                                      fontSize: 9,
+                                      background: "rgba(37, 99, 235, 0.08)",
+                                      color: "var(--text-brand)",
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                      fontWeight: 600,
+                                      border: "1px solid rgba(37, 99, 235, 0.15)",
+                                    }}
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td>
@@ -821,12 +858,35 @@ export default function Todos() {
                           style={{
                             fontSize: 11,
                             color: "var(--text-muted)",
-                            margin: "0 0 12px 0",
+                            margin: "0 0 8px 0",
                             lineHeight: "1.5",
                           }}
                         >
                           {todo.description}
                         </p>
+
+                        {/* Tags */}
+                        {todo.tags && todo.tags.length > 0 && (
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+                            {todo.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                style={{
+                                  fontSize: 9,
+                                  background: "rgba(139, 92, 246, 0.1)",
+                                  color: "var(--accent-600)",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.02em",
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Category tag & Staff Avatar */}
                         <div
@@ -1080,6 +1140,13 @@ export default function Todos() {
               </select>
             </div>
           )}
+
+          <TagSelector
+            label="Tags"
+            value={currentTodo.tags || []}
+            onChange={(tags) => setCurrentTodo({ ...currentTodo, tags })}
+            suggestions={TODO_TAGS}
+          />
         </form>
       </Modal>
     </div>

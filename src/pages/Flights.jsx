@@ -7,8 +7,15 @@ import {
   Pagination,
 } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
+import TagSelector from "../components/ui/TagSelector.jsx";
 import { mockFlightBookings } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+
+const FLIGHT_TAGS = [
+  "Domestic", "International", "Business", "Economy", "Leisure",
+  "Family", "Corporate", "Urgent", "Holiday", "Honeymoon",
+  "Refund Pending", "Group Booking",
+];
 
 export default function Flights() {
   const { addToast } = useApp();
@@ -33,6 +40,7 @@ export default function Flights() {
     amount: "",
     pax: 1,
     status: "pending",
+    tags: [],
   });
 
   const handleOpenAddModal = () => {
@@ -52,12 +60,13 @@ export default function Flights() {
       amount: "₹",
       pax: 1,
       status: "pending",
+      tags: [],
     });
     setAddOpen(true);
   };
 
   const handleOpenEditModal = (b) => {
-    setFormBooking({ ...b });
+    setFormBooking({ ...b, tags: b.tags || [] });
     setEditOpen(true);
   };
 
@@ -111,10 +120,12 @@ export default function Flights() {
 
   const filtered = bookings.filter((b) => {
     const s = search.toLowerCase();
+    const matchesTags = b.tags && b.tags.some((tag) => tag.toLowerCase().includes(s));
     return (
       (b.id.toLowerCase().includes(s) ||
         b.user.toLowerCase().includes(s) ||
-        b.pnr.toLowerCase().includes(s)) &&
+        b.pnr.toLowerCase().includes(s) ||
+        matchesTags) &&
       (statusFilter === "all" || b.status === statusFilter)
     );
   });
@@ -311,7 +322,29 @@ export default function Flights() {
                       >
                         {b.id}
                       </td>
-                      <td style={{ fontWeight: 500 }}>{b.user}</td>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{b.user}</div>
+                        {b.tags && b.tags.length > 0 && (
+                          <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                            {b.tags.map((t) => (
+                              <span
+                                key={t}
+                                style={{
+                                  fontSize: 9,
+                                  background: "rgba(37, 99, 235, 0.08)",
+                                  color: "var(--text-brand)",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  fontWeight: 600,
+                                  border: "1px solid rgba(37, 99, 235, 0.15)",
+                                }}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <div
                           style={{
@@ -407,6 +440,27 @@ export default function Flights() {
                     <div>
                       <div style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, color: "var(--brand-600)" }}>{b.id}</div>
                       <div style={{ fontSize: 15, fontWeight: 600, marginTop: 4, color: "var(--text-primary)" }}>{b.user}</div>
+                      {b.tags && b.tags.length > 0 && (
+                        <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                          {b.tags.map((t) => (
+                            <span
+                              key={t}
+                              style={{
+                                fontSize: 9,
+                                background: "rgba(139, 92, 246, 0.1)",
+                                color: "var(--accent-600)",
+                                padding: "1px 6px",
+                                borderRadius: "4px",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.02em",
+                              }}
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <StatusBadge status={b.status} />
                   </div>
@@ -586,6 +640,7 @@ export default function Flights() {
                 { label: "Date", val: selected.date },
                 { label: "Pax", val: selected.pax },
                 { label: "Amount", val: selected.amount },
+                { label: "Tags", val: selected.tags && selected.tags.length > 0 ? selected.tags.join(", ") : "None" },
               ].map((f) => (
                 <div
                   key={f.label}
@@ -786,6 +841,12 @@ export default function Flights() {
               />
             </div>
           </div>
+          <TagSelector
+            label="Tags"
+            value={formBooking.tags || []}
+            onChange={(tags) => setFormBooking({ ...formBooking, tags })}
+            suggestions={FLIGHT_TAGS}
+          />
           <div
             style={{
               display: "flex",

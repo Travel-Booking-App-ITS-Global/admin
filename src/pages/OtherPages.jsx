@@ -230,7 +230,29 @@ export function Itineraries() {
                     {it.id}
                   </td>
                   <td style={{ fontWeight: 500 }}>{it.user}</td>
-                  <td style={{ fontWeight: 600 }}>{it.title}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    {it.title}
+                    {it.tags && it.tags.length > 0 && (
+                      <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                        {it.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            style={{
+                              fontSize: 9,
+                              background: "rgba(37, 99, 235, 0.08)",
+                              color: "var(--text-brand)",
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              fontWeight: 600,
+                              border: "1px solid rgba(37, 99, 235, 0.15)",
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ fontWeight: 600 }}>{it.days}</td>
                   <td>{it.destinations} cities</td>
                   <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
@@ -434,6 +456,26 @@ export function CMS() {
                   <tr key={f.id}>
                     <td style={{ fontWeight: 500, maxWidth: 400 }}>
                       {f.question}
+                      {f.tags && f.tags.length > 0 && (
+                        <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                          {f.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              style={{
+                                fontSize: 9,
+                                background: "rgba(37, 99, 235, 0.08)",
+                                color: "var(--text-brand)",
+                                padding: "1px 6px",
+                                borderRadius: 4,
+                                fontWeight: 600,
+                                border: "1px solid rgba(37, 99, 235, 0.15)",
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span

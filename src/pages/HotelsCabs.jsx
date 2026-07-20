@@ -8,11 +8,30 @@ import {
   Pagination,
 } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
+import TagSelector from "../components/ui/TagSelector.jsx";
 import {
   mockHotelBookings,
   mockCabBookings,
 } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+
+const HOTEL_TAGS = [
+  "Luxury", "Budget", "Heritage", "Resort", "Business",
+  "Family", "Holiday", "Express", "Five Star", "Boutique",
+  "Sea View", "City Centre", "Promo",
+];
+const CAB_TAGS = [
+  "Airport Transfer", "Local Ride", "Outstation", "SUV", "Sedan",
+  "Budget", "Early Morning", "Night Ride", "Premium", "Group",
+];
+const DRIVER_TAGS = [
+  "Top Rated", "English Speaking", "SUV Expert", "Local Guide",
+  "Veteran", "No Cancellations", "Night Shift", "Airport Specialist",
+];
+const VEHICLE_TAGS = [
+  "Sedan", "SUV", "Tempo Traveller", "Luxury", "Commercial",
+  "AITP Permitted", "AC", "Non-AC", "GPS Enabled",
+];
 
 /* =================== HOTELS PAGE =================== */
 export function Hotels() {
@@ -37,6 +56,7 @@ export function Hotels() {
     nights: 1,
     amount: "",
     status: "pending",
+    tags: [],
   });
 
   const handleOpenAddModal = () => {
@@ -57,12 +77,13 @@ export function Hotels() {
       nights: 1,
       amount: "₹",
       status: "pending",
+      tags: [],
     });
     setAddOpen(true);
   };
 
   const handleOpenEditModal = (booking) => {
-    setFormHotel({ ...booking });
+    setFormHotel({ ...booking, tags: booking.tags || [] });
     setEditOpen(true);
   };
 
@@ -109,12 +130,16 @@ export function Hotels() {
     setSelected(null);
   };
 
-  const filtered = hotelBookings.filter(
-    (b) =>
-      b.hotel.toLowerCase().includes(search.toLowerCase()) ||
-      b.user.toLowerCase().includes(search.toLowerCase()) ||
-      b.city.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = hotelBookings.filter((b) => {
+    const s = search.toLowerCase();
+    const matchesTags = b.tags && b.tags.some((tag) => tag.toLowerCase().includes(s));
+    return (
+      b.hotel.toLowerCase().includes(s) ||
+      b.user.toLowerCase().includes(s) ||
+      b.city.toLowerCase().includes(s) ||
+      matchesTags
+    );
+  });
 
   const perPage = 10;
   const totalPages = Math.ceil(filtered.length / perPage) || 1;
@@ -210,7 +235,29 @@ export function Hotels() {
                       >
                         {b.id}
                       </td>
-                      <td style={{ fontWeight: 500 }}>{b.user}</td>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{b.user}</div>
+                        {b.tags && b.tags.length > 0 && (
+                          <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                            {b.tags.map((t) => (
+                              <span
+                                key={t}
+                                style={{
+                                  fontSize: 9,
+                                  background: "rgba(37, 99, 235, 0.08)",
+                                  color: "var(--text-brand)",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  fontWeight: 600,
+                                  border: "1px solid rgba(37, 99, 235, 0.15)",
+                                }}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       <td>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>
                           {b.hotel}
@@ -280,6 +327,27 @@ export function Hotels() {
                         <MapPin size={12} style={{ color: "var(--text-muted)" }} />
                         {b.city}
                       </div>
+                      {b.tags && b.tags.length > 0 && (
+                        <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                          {b.tags.map((t) => (
+                            <span
+                              key={t}
+                              style={{
+                                fontSize: 9,
+                                background: "rgba(139, 92, 246, 0.1)",
+                                color: "var(--accent-600)",
+                                padding: "1px 6px",
+                                borderRadius: "4px",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.02em",
+                              }}
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <StatusBadge status={b.status} />
                   </div>
@@ -421,6 +489,7 @@ export function Hotels() {
                 { label: "Total Nights", val: selected.nights },
                 { label: "Paid Amount", val: selected.amount },
                 { label: "Booking Status", val: selected.status },
+                { label: "Tags", val: selected.tags && selected.tags.length > 0 ? selected.tags.join(", ") : "None" },
               ].map((f) => (
                 <div
                   key={f.label}
@@ -591,6 +660,12 @@ export function Hotels() {
               required
             />
           </div>
+          <TagSelector
+            label="Tags"
+            value={formHotel.tags || []}
+            onChange={(tags) => setFormHotel({ ...formHotel, tags })}
+            suggestions={HOTEL_TAGS}
+          />
           <div
             style={{
               display: "flex",
@@ -783,6 +858,7 @@ export function Cabs() {
     amount: "",
     status: "scheduled",
     rating: null,
+    tags: [],
   });
 
   // Driver Onboarding compliance states (Indian Guidelines)
@@ -805,6 +881,7 @@ export function Cabs() {
     dlExpiry: "",
     policeVerification: "pending",
     photo: "",
+    tags: [],
   });
 
   // Vehicle Onboarding compliance states
@@ -821,6 +898,7 @@ export function Cabs() {
     permit: "All India Tourist Permit (AITP)",
     status: "active",
     driver: "Unassigned",
+    tags: [],
   });
 
   // Rides handlers
@@ -842,12 +920,13 @@ export function Cabs() {
       amount: "₹",
       status: "scheduled",
       rating: null,
+      tags: [],
     });
     setAddRideOpen(true);
   };
 
   const handleOpenEditRideModal = (ride) => {
-    setFormRide({ ...ride });
+    setFormRide({ ...ride, tags: ride.tags || [] });
     setEditRideOpen(true);
   };
 
@@ -894,12 +973,13 @@ export function Cabs() {
       dlExpiry: "",
       policeVerification: "pending",
       photo: "",
+      tags: [],
     });
     setAddDriverOpen(true);
   };
 
   const handleOpenEditDriverModal = (driver) => {
-    setFormDriver({ ...driver });
+    setFormDriver({ ...driver, tags: driver.tags || [] });
     setEditDriverOpen(true);
   };
 
@@ -982,12 +1062,13 @@ export function Cabs() {
       permit: "All India Tourist Permit (AITP)",
       status: "active",
       driver: drivers.length > 0 ? drivers[0].name : "Unassigned",
+      tags: [],
     });
     setAddVehicleOpen(true);
   };
 
   const handleOpenEditVehicleModal = (veh) => {
-    setFormVehicle({ ...veh });
+    setFormVehicle({ ...veh, tags: veh.tags || [] });
     setEditVehicleOpen(true);
   };
 
@@ -1046,11 +1127,15 @@ export function Cabs() {
     addToast(`Vehicle status set to ${nextStatus}`, "success");
   };
 
-  const filteredRides = rides.filter(
-    (b) =>
-      b.user.toLowerCase().includes(search.toLowerCase()) ||
-      b.driver.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredRides = rides.filter((b) => {
+    const s = search.toLowerCase();
+    const matchesTags = b.tags && b.tags.some((tag) => tag.toLowerCase().includes(s));
+    return (
+      b.user.toLowerCase().includes(s) ||
+      b.driver.toLowerCase().includes(s) ||
+      matchesTags
+    );
+  });
 
   const perPage = 10;
 
@@ -1058,21 +1143,29 @@ export function Cabs() {
   const currentRidesPage = ridesPage > totalRidesPages ? 1 : ridesPage;
   const paginatedRides = filteredRides.slice((currentRidesPage - 1) * perPage, currentRidesPage * perPage);
 
-  const filteredDrivers = drivers.filter(
-    (d) =>
-      d.name.toLowerCase().includes(driverSearch.toLowerCase()) ||
-      d.city.toLowerCase().includes(driverSearch.toLowerCase())
-  );
+  const filteredDrivers = drivers.filter((d) => {
+    const s = driverSearch.toLowerCase();
+    const matchesTags = d.tags && d.tags.some((tag) => tag.toLowerCase().includes(s));
+    return (
+      d.name.toLowerCase().includes(s) ||
+      d.city.toLowerCase().includes(s) ||
+      matchesTags
+    );
+  });
 
   const totalDriversPages = Math.ceil(filteredDrivers.length / perPage) || 1;
   const currentDriversPage = driversPage > totalDriversPages ? 1 : driversPage;
   const paginatedDrivers = filteredDrivers.slice((currentDriversPage - 1) * perPage, currentDriversPage * perPage);
 
-  const filteredVehicles = vehicles.filter(
-    (v) =>
-      v.model.toLowerCase().includes(vehicleSearch.toLowerCase()) ||
-      v.plate.toLowerCase().includes(vehicleSearch.toLowerCase())
-  );
+  const filteredVehicles = vehicles.filter((v) => {
+    const s = vehicleSearch.toLowerCase();
+    const matchesTags = v.tags && v.tags.some((tag) => tag.toLowerCase().includes(s));
+    return (
+      v.model.toLowerCase().includes(s) ||
+      v.plate.toLowerCase().includes(s) ||
+      matchesTags
+    );
+  });
 
   const totalVehiclesPages = Math.ceil(filteredVehicles.length / perPage) || 1;
   const currentVehiclesPage = vehiclesPage > totalVehiclesPages ? 1 : vehiclesPage;
@@ -1197,7 +1290,29 @@ export function Cabs() {
                         >
                           {r.id}
                         </td>
-                        <td style={{ fontWeight: 500 }}>{r.user}</td>
+                        <td>
+                          <div style={{ fontWeight: 500 }}>{r.user}</div>
+                          {r.tags && r.tags.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                              {r.tags.map((t) => (
+                                <span
+                                  key={t}
+                                  style={{
+                                    fontSize: 9,
+                                    background: "rgba(37, 99, 235, 0.08)",
+                                    color: "var(--text-brand)",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontWeight: 600,
+                                    border: "1px solid rgba(37, 99, 235, 0.15)",
+                                  }}
+                                >
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ fontSize: 13, fontWeight: 600 }}>
                           {r.driver}
                         </td>
@@ -1266,6 +1381,27 @@ export function Cabs() {
                       <div>
                         <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "var(--success-600)" }}>{r.id}</div>
                         <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: "var(--text-primary)" }}>{r.user}</div>
+                        {r.tags && r.tags.length > 0 && (
+                          <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                            {r.tags.map((t) => (
+                              <span
+                                key={t}
+                                style={{
+                                  fontSize: 9,
+                                  background: "rgba(16, 185, 129, 0.1)",
+                                  color: "var(--success-700)",
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.02em",
+                                }}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <StatusBadge status={r.status} />
                     </div>
@@ -1398,6 +1534,26 @@ export function Cabs() {
                               >
                                 {d.id}
                               </div>
+                              {d.tags && d.tags.length > 0 && (
+                                <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                  {d.tags.map((t) => (
+                                    <span
+                                      key={t}
+                                      style={{
+                                        fontSize: 9,
+                                        background: "rgba(37, 99, 235, 0.08)",
+                                        color: "var(--text-brand)",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        fontWeight: 600,
+                                        border: "1px solid rgba(37, 99, 235, 0.15)",
+                                      }}
+                                    >
+                                      {t}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1502,6 +1658,27 @@ export function Cabs() {
                         <div>
                           <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{d.name}</div>
                           <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)" }}>{d.id}</div>
+                          {d.tags && d.tags.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                              {d.tags.map((t) => (
+                                <span
+                                  key={t}
+                                  style={{
+                                    fontSize: 9,
+                                    background: "rgba(139, 92, 246, 0.1)",
+                                    color: "var(--accent-600)",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontWeight: 700,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.02em",
+                                  }}
+                                >
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <StatusBadge status={d.status} />
@@ -1632,7 +1809,29 @@ export function Cabs() {
                           >
                             {v.id}
                           </td>
-                          <td style={{ fontWeight: 600, fontSize: 13 }}>{v.model}</td>
+                          <td>
+                            <div style={{ fontWeight: 600, fontSize: 13 }}>{v.model}</div>
+                            {v.tags && v.tags.length > 0 && (
+                              <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                {v.tags.map((t) => (
+                                  <span
+                                    key={t}
+                                    style={{
+                                      fontSize: 9,
+                                      background: "rgba(37, 99, 235, 0.08)",
+                                      color: "var(--text-brand)",
+                                      padding: "2px 6px",
+                                      borderRadius: "4px",
+                                      fontWeight: 600,
+                                      border: "1px solid rgba(37, 99, 235, 0.15)",
+                                    }}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
                           <td style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--text-primary)" }}>{v.plate}</td>
                           <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{v.rcNumber}</td>
                           <td>
@@ -1692,6 +1891,27 @@ export function Cabs() {
                         <div>
                           <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "var(--brand-600)" }}>{v.id}</div>
                           <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: "var(--text-primary)" }}>{v.model}</div>
+                          {v.tags && v.tags.length > 0 && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                              {v.tags.map((t) => (
+                                <span
+                                  key={t}
+                                  style={{
+                                    fontSize: 9,
+                                    background: "rgba(139, 92, 246, 0.1)",
+                                    color: "var(--accent-600)",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontWeight: 700,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.02em",
+                                  }}
+                                >
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <StatusBadge status={v.status} />
                       </div>
@@ -1855,6 +2075,7 @@ export function Cabs() {
                 { label: "Vehicle Assigned", val: `${selectedDriver.vehicle} (${selectedDriver.plate})` },
                 { label: "Profile Status", val: selectedDriver.status },
                 { label: "Rating Metric", val: `${selectedDriver.rating} ★ (${selectedDriver.rides} rides)` },
+                { label: "Tags", val: selectedDriver.tags && selectedDriver.tags.length > 0 ? selectedDriver.tags.join(", ") : "None" },
               ].map((f) => (
                 <div
                   key={f.label}
@@ -1968,6 +2189,7 @@ export function Cabs() {
                 { label: "State Transport Permit", val: selectedVehicle.permit },
                 { label: "Assigned Driver", val: selectedVehicle.driver },
                 { label: "Active Fleet Status", val: selectedVehicle.status },
+                { label: "Tags", val: selectedVehicle.tags && selectedVehicle.tags.length > 0 ? selectedVehicle.tags.join(", ") : "None" },
               ].map((f) => (
                 <div
                   key={f.label}
@@ -2129,6 +2351,12 @@ export function Cabs() {
               </select>
             </div>
           </div>
+          <TagSelector
+            label="Tags"
+            value={formRide.tags || []}
+            onChange={(tags) => setFormRide({ ...formRide, tags })}
+            suggestions={CAB_TAGS}
+          />
           <div
             style={{
               display: "flex",
@@ -2374,6 +2602,12 @@ export function Cabs() {
               />
             </div>
           </div>
+          <TagSelector
+            label="Tags"
+            value={formDriver.tags || []}
+            onChange={(tags) => setFormDriver({ ...formDriver, tags })}
+            suggestions={DRIVER_TAGS}
+          />
 
           <div
             style={{
@@ -2522,6 +2756,12 @@ export function Cabs() {
               </select>
             </div>
           </div>
+          <TagSelector
+            label="Tags"
+            value={formVehicle.tags || []}
+            onChange={(tags) => setFormVehicle({ ...formVehicle, tags })}
+            suggestions={VEHICLE_TAGS}
+          />
           <div style={{ display: "flex", gap: 10, justifySelf: "end", justifyContent: "flex-end", marginTop: 10 }}>
             <button
               type="button"

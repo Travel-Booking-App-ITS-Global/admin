@@ -20,6 +20,12 @@ export default function ConnectedApisTab() {
   const [newApiName, setNewApiName] = useState("");
   const [newApiType, setNewApiType] = useState("Flight");
   const [newApiProvider, setNewApiProvider] = useState("");
+  const [newApiTags, setNewApiTags] = useState("");
+
+  // Search/Filter states
+  const [apisSearchTerm, setApisSearchTerm] = useState("");
+  const [activeApiFilter, setActiveApiFilter] = useState("All");
+  const apisFilterTags = ["All", "GDS", "Flights", "Hotels", "Global", "Domestic", "Maps", "Navigation"];
 
   const testApi = (id, name) => {
     addToast(`Pinging ${name}…`, "info");
@@ -40,6 +46,9 @@ export default function ConnectedApisTab() {
       addToast("Please fill out API Name and Provider", "error");
       return;
     }
+    const parsedTags = newApiTags
+      ? newApiTags.split(",").map((t) => t.trim()).filter(Boolean)
+      : [];
     const added = {
       id: `API${Date.now()}`,
       name: newApiName,
@@ -48,11 +57,13 @@ export default function ConnectedApisTab() {
       status: "active",
       lastPing: "Just now",
       latency: "45ms",
+      tags: parsedTags,
     };
     setApiConfigs((prev) => [...prev, added]);
     addToast(`${newApiName} connected successfully!`, "success");
     setNewApiName("");
     setNewApiProvider("");
+    setNewApiTags("");
     setAddApiOpen(false);
   };
 
@@ -60,6 +71,16 @@ export default function ConnectedApisTab() {
     setApiConfigs((prev) => prev.filter((a) => a.id !== id));
     addToast(`${name} disconnected!`, "warning");
   };
+
+  const filteredApiConfigs = apiConfigs.filter((api) => {
+    const matchesSearch = api.name.toLowerCase().includes(apisSearchTerm.toLowerCase()) || 
+                          api.provider.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
+                          api.type.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
+                          (api.tags && api.tags.some(t => t.toLowerCase().includes(apisSearchTerm.toLowerCase())));
+    const matchesFilter = activeApiFilter === "All" || (api.tags && api.tags.includes(activeApiFilter));
+    return matchesSearch && matchesFilter;
+  });
+
 
   return (
     <div>
@@ -74,6 +95,67 @@ export default function ConnectedApisTab() {
             + Add API
           </button>
         </div>
+        {/* Search & Tags Filters */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-default)", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ position: "relative" }}>
+            <input
+              type="text"
+              placeholder="Search APIs by name, type, provider, or tag..."
+              value={apisSearchTerm}
+              onChange={(e) => setApisSearchTerm(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px 8px 32px",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-default)",
+                background: "var(--bg-card)",
+                color: "var(--text-primary)",
+                fontSize: 13,
+                outline: "none",
+              }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                left: 10,
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: 13,
+                opacity: 0.6,
+              }}
+            >
+              🔍
+            </span>
+          </div>
+
+          {/* Quick Tag Pills */}
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {apisFilterTags.map((tag) => {
+              const isActive = activeApiFilter === tag;
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setActiveApiFilter(tag)}
+                  style={{
+                    border: "none",
+                    padding: "4px 10px",
+                    borderRadius: "var(--radius-full)",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    background: isActive ? "var(--brand-500)" : "var(--bg-hover)",
+                    color: isActive ? "#fff" : "var(--text-secondary)",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="table-wrap">
           <table>
             <thead>
@@ -88,7 +170,7 @@ export default function ConnectedApisTab() {
               </tr>
             </thead>
             <tbody>
-              {apiConfigs.map((a) => (
+              {filteredApiConfigs.map((a) => (
                 <tr key={a.id}>
                   <td style={{ fontWeight: 600 }}>
                     <div
@@ -108,7 +190,26 @@ export default function ConnectedApisTab() {
                           flexShrink: 0,
                         }}
                       />
-                      {a.name}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <span>{a.name}</span>
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          {a.tags && a.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              style={{
+                                fontSize: 9,
+                                background: "rgba(16, 185, 129, 0.08)",
+                                color: "#10b981",
+                                padding: "1px 5px",
+                                borderRadius: "3px",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td>
@@ -171,6 +272,13 @@ export default function ConnectedApisTab() {
                   </td>
                 </tr>
               ))}
+              {filteredApiConfigs.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)", fontSize: 13 }}>
+                    No APIs found matching the search/filter criteria.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -227,6 +335,17 @@ export default function ConnectedApisTab() {
                 required
               />
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Tags (comma-separated)</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. Flights, Global, Live"
+              value={newApiTags}
+              onChange={(e) => setNewApiTags(e.target.value)}
+            />
           </div>
 
           <div

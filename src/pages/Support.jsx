@@ -2,8 +2,15 @@ import { useState } from "react";
 import { MessageCircle, CheckCircle, User, Clock, AlertTriangle, Plus } from "lucide-react";
 import { PageHeader, StatusBadge, TableFilters, Avatar } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
+import TagSelector from "../components/ui/TagSelector.jsx";
 import { mockTickets } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+
+const SUPPORT_TAGS = [
+  "Payment", "Urgent", "Flight", "Hotel", "Cab", "Refund",
+  "Cancellation", "Name Correction", "No-Show", "Escalation",
+  "App Issue", "Rebooking", "VIP",
+];
 
 const PRIORITY_COLOR = { high: "var(--danger-500)", medium: "var(--warning-500)", low: "var(--gray-400)" };
 
@@ -26,6 +33,7 @@ export default function Support() {
     priority: "medium",
     status: "open",
     assigned: "Pooja S.",
+    tags: [],
   });
 
   const handleOpenAddModal = () => {
@@ -36,6 +44,7 @@ export default function Support() {
       priority: "medium",
       status: "open",
       assigned: "Pooja S.",
+      tags: [],
     });
     setAddOpen(true);
   };
@@ -55,6 +64,7 @@ export default function Support() {
       status: formTicket.status,
       created: "Just now",
       assigned: formTicket.assigned,
+      tags: formTicket.tags || [],
     };
     setTickets((prev) => [added, ...prev]);
     addToast(`Ticket ${added.id} filed successfully!`, "success");
@@ -63,10 +73,12 @@ export default function Support() {
 
   const filtered = tickets.filter((t) => {
     const s = search.toLowerCase();
+    const matchesTags = t.tags && t.tags.some((tag) => tag.toLowerCase().includes(s));
     return (
       (t.id.toLowerCase().includes(s) ||
         t.user.toLowerCase().includes(s) ||
-        t.subject.toLowerCase().includes(s)) &&
+        t.subject.toLowerCase().includes(s) ||
+        matchesTags) &&
       (statusFilter === "all" || t.status === statusFilter)
     );
   });
@@ -268,6 +280,26 @@ export default function Support() {
                       {t.category}
                     </span>
                     <StatusBadge status={t.priority} />
+                    {t.tags && t.tags.length > 0 && (
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {t.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            style={{
+                              fontSize: 9,
+                              background: "rgba(37, 99, 235, 0.08)",
+                              color: "var(--text-brand)",
+                              padding: "2px 6px",
+                              borderRadius: "4px",
+                              fontWeight: 600,
+                              border: "1px solid rgba(37, 99, 235, 0.15)",
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{t.subject}</div>
                   <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--text-muted)" }}>
@@ -382,6 +414,16 @@ export default function Support() {
                   <option value="in_progress">In Progress</option>
                   <option value="resolved">Resolved</option>
                 </select>
+              </div>
+
+              <div style={{ flex: "1 1 auto" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>Tags:</span>
+                <TagSelector
+                  label=""
+                  value={selected.tags || []}
+                  onChange={(tags) => updateTicketField("tags", tags)}
+                  suggestions={SUPPORT_TAGS}
+                />
               </div>
             </div>
 
