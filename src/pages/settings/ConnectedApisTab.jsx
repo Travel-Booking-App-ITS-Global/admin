@@ -25,7 +25,16 @@ export default function ConnectedApisTab() {
   // Search/Filter states
   const [apisSearchTerm, setApisSearchTerm] = useState("");
   const [activeApiFilter, setActiveApiFilter] = useState("All");
-  const apisFilterTags = ["All", "GDS", "Flights", "Hotels", "Global", "Domestic", "Maps", "Navigation"];
+  const apisFilterTags = [
+    "All",
+    "GDS",
+    "Flights",
+    "Hotels",
+    "Global",
+    "Domestic",
+    "Maps",
+    "Navigation",
+  ];
 
   const testApi = (id, name) => {
     addToast(`Pinging ${name}…`, "info");
@@ -47,7 +56,10 @@ export default function ConnectedApisTab() {
       return;
     }
     const parsedTags = newApiTags
-      ? newApiTags.split(",").map((t) => t.trim()).filter(Boolean)
+      ? newApiTags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
       : [];
     const added = {
       id: `API${Date.now()}`,
@@ -73,14 +85,19 @@ export default function ConnectedApisTab() {
   };
 
   const filteredApiConfigs = apiConfigs.filter((api) => {
-    const matchesSearch = api.name.toLowerCase().includes(apisSearchTerm.toLowerCase()) || 
-                          api.provider.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
-                          api.type.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
-                          (api.tags && api.tags.some(t => t.toLowerCase().includes(apisSearchTerm.toLowerCase())));
-    const matchesFilter = activeApiFilter === "All" || (api.tags && api.tags.includes(activeApiFilter));
+    const matchesSearch =
+      api.name.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
+      api.provider.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
+      api.type.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
+      (api.tags &&
+        api.tags.some((t) =>
+          t.toLowerCase().includes(apisSearchTerm.toLowerCase()),
+        ));
+    const matchesFilter =
+      activeApiFilter === "All" ||
+      (api.tags && api.tags.includes(activeApiFilter));
     return matchesSearch && matchesFilter;
   });
-
 
   return (
     <div>
@@ -96,7 +113,15 @@ export default function ConnectedApisTab() {
           </button>
         </div>
         {/* Search & Tags Filters */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-default)", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div
+          style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid var(--border-default)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
           <div style={{ position: "relative" }}>
             <input
               type="text"
@@ -144,7 +169,9 @@ export default function ConnectedApisTab() {
                     fontSize: 11,
                     fontWeight: 600,
                     cursor: "pointer",
-                    background: isActive ? "var(--brand-500)" : "var(--bg-hover)",
+                    background: isActive
+                      ? "var(--brand-500)"
+                      : "var(--bg-hover)",
                     color: isActive ? "#fff" : "var(--text-secondary)",
                     transition: "all 0.15s",
                   }}
@@ -190,24 +217,33 @@ export default function ConnectedApisTab() {
                           flexShrink: 0,
                         }}
                       />
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                        }}
+                      >
                         <span>{a.name}</span>
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                          {a.tags && a.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              style={{
-                                fontSize: 9,
-                                background: "rgba(16, 185, 129, 0.08)",
-                                color: "#10b981",
-                                padding: "1px 5px",
-                                borderRadius: "3px",
-                                fontWeight: 700,
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          ))}
+                        <div
+                          style={{ display: "flex", gap: 4, flexWrap: "wrap" }}
+                        >
+                          {a.tags &&
+                            a.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                style={{
+                                  fontSize: 9,
+                                  background: "rgba(16, 185, 129, 0.08)",
+                                  color: "#10b981",
+                                  padding: "1px 5px",
+                                  borderRadius: "3px",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
                         </div>
                       </div>
                     </div>
@@ -230,9 +266,7 @@ export default function ConnectedApisTab() {
                   <td>
                     <StatusBadge status={a.status} />
                   </td>
-                  <td
-                    style={{ fontSize: 12, color: "var(--text-muted)" }}
-                  >
+                  <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
                     {a.lastPing}
                   </td>
                   <td>
@@ -274,7 +308,15 @@ export default function ConnectedApisTab() {
               ))}
               {filteredApiConfigs.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: "30px 0", color: "var(--text-muted)", fontSize: 13 }}>
+                  <td
+                    colSpan={7}
+                    style={{
+                      textAlign: "center",
+                      padding: "30px 0",
+                      color: "var(--text-muted)",
+                      fontSize: 13,
+                    }}
+                  >
                     No APIs found matching the search/filter criteria.
                   </td>
                 </tr>
