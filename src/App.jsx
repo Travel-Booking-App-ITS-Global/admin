@@ -20,8 +20,10 @@ import Support from './pages/Support.jsx';
 import Payments from './pages/Payments.jsx';
 import Staff from './pages/Staff.jsx';
 import Todos from './pages/Todos.jsx';
+import Analytics from './pages/Analytics.jsx';
+import Reports from './pages/Reports.jsx';
 import {
-  Analytics, Itineraries, AIChat, CMS, Notifications, Settings, Contacts
+  Itineraries, AIChat, CMS, Notifications, Settings, Contacts
 } from './pages/OtherPages.jsx';
 
 function AdminShell() {
@@ -56,7 +58,7 @@ function AdminShell() {
             <Route path="packages"     element={<Packages />} />
             <Route path="itineraries"  element={<Itineraries />} />
             <Route path="ai-chat"      element={<AIChat />} />
-            <Route path="reports"      element={<Analytics />} />
+            <Route path="reports"      element={<Reports />} />
             <Route path="cms"          element={<CMS />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="support"      element={<Support />} />
