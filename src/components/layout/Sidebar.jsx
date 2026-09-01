@@ -63,7 +63,7 @@ const NAV_GROUPS = [
 ];
 
 export default function Sidebar() {
-  const { sidebarCollapsed, adminName, adminEmail, adminAvatar } = useApp();
+  const { sidebarCollapsed, adminName, adminEmail, adminAvatar, logoutAdmin } = useApp();
 
   const initials = adminName
     ? adminName
@@ -112,7 +112,12 @@ export default function Sidebar() {
 
       {/* Footer / User */}
       <div className="sidebar-footer">
-        <NavLink to="/login" className="nav-item" style={{ marginBottom: 8 }}>
+        <NavLink 
+          to="/login" 
+          onClick={logoutAdmin}
+          className="nav-item" 
+          style={{ marginBottom: 8 }}
+        >
           <LogOut className="nav-item-icon" size={18} />
           <span className="nav-item-label">Logout</span>
         </NavLink>

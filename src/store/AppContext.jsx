@@ -194,7 +194,35 @@ export function AppProvider({ children }) {
   const [adminName, setAdminName] = useState(() => load("its_admin_name", "Super Admin"));
   const [adminEmail, setAdminEmail] = useState(() => load("its_admin_email", "admin@itsglobal.in"));
   const [adminAvatar, setAdminAvatar] = useState(() => load("its_admin_avatar", ""));
-  const [adminPassword, setAdminPassword] = useState(() => load("its_admin_password", "admin123"));
+  const [adminRole, setAdminRole] = useState(() => load("its_admin_role", "SUPER_ADMIN"));
+  const [adminPassword, setAdminPassword] = useState(() => load("its_admin_password", "Admin@123456"));
+
+  const loginAdmin = (user, tokens) => {
+    if (user) {
+      setAdminName(user.name || 'Admin');
+      setAdminEmail(user.email || '');
+      setAdminRole(user.role || 'SUPER_ADMIN');
+      if (user.avatar) setAdminAvatar(user.avatar);
+      save("its_admin_name", user.name || 'Admin');
+      save("its_admin_email", user.email || '');
+      save("its_admin_role", user.role || 'SUPER_ADMIN');
+      if (user.avatar) save("its_admin_avatar", user.avatar);
+      save("its_admin_user_data", user);
+    }
+    if (tokens?.accessToken) {
+      localStorage.setItem("its_admin_access_token", tokens.accessToken);
+    }
+    if (tokens?.refreshToken) {
+      localStorage.setItem("its_admin_refresh_token", tokens.refreshToken);
+    }
+  };
+
+  const logoutAdmin = () => {
+    localStorage.removeItem("its_admin_access_token");
+    localStorage.removeItem("its_admin_refresh_token");
+    localStorage.removeItem("its_admin_user_data");
+    setAdminName("Super Admin");
+  };
 
   const updateAdminProfile = (name, email, avatar) => {
     setAdminName(name);
@@ -280,6 +308,9 @@ export function AppProvider({ children }) {
         adminName,
         adminEmail,
         adminAvatar,
+        adminRole,
+        loginAdmin,
+        logoutAdmin,
         updateAdminProfile,
         changeAdminPassword,
       }}

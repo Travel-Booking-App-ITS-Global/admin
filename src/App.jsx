@@ -25,6 +25,7 @@ import Reports from './pages/Reports.jsx';
 import {
   Itineraries, AIChat, CMS, Notifications, Settings, Contacts
 } from './pages/OtherPages.jsx';
+import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
 
 function AdminShell() {
   const { sidebarCollapsed, toggleSidebar } = useApp();
@@ -78,7 +79,14 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/*" element={<AdminShell />} />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <AdminShell />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }
