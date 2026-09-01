@@ -21,6 +21,7 @@ import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
 import { exportToCSV } from "../utils/export.js";
 import { useLocation } from "react-router-dom";
+import { usersApi } from "../services/api.js";
 
 const USER_TAGS = [
   "VIP", "Frequent Flyer", "Corporate", "Family Travel",
@@ -114,6 +115,13 @@ const getPackages = (userName) => {
 export default function Users() {
   const { addToast } = useApp();
   const [users, setUsers] = useState(mockUsers);
+  const [stats, setStats] = useState({
+    total: mockUsers.length,
+    active: mockUsers.filter(u => u.status === 'active').length,
+    inactive: mockUsers.filter(u => u.status === 'inactive').length,
+    blocked: mockUsers.filter(u => u.status === 'blocked').length,
+  });
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -121,7 +129,51 @@ export default function Users() {
   const [selected, setSelected] = useState(null);
   const [activeDetailTab, setActiveDetailTab] = useState("overview");
 
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
   const location = useLocation();
+
+  const loadStats = async () => {
+    try {
+      const statsData = await usersApi.getStats();
+      if (statsData) {
+        setStats({
+          total: statsData.total ?? 0,
+          active: statsData.active ?? 0,
+          inactive: statsData.inactive ?? 0,
+          blocked: statsData.blocked ?? 0,
+        });
+      }
+    } catch {
+      // Keep existing/mock stats
+    }
+  };
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await usersApi.getAll({
+        status: statusFilter,
+        search: search,
+      });
+      if (res && Array.isArray(res.items) && res.items.length > 0) {
+        setUsers(res.items);
+      } else if (res && Array.isArray(res.items) && res.items.length === 0 && (search || statusFilter !== 'all')) {
+        setUsers([]);
+      }
+      await loadStats();
+    } catch (err) {
+      console.warn("Using offline fallback users data:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, [statusFilter, search]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -145,24 +197,58 @@ export default function Users() {
     tags: [],
   });
 
-  const toggleBlockUser = (id, currentStatus) => {
+  const toggleBlockUser = async (id, currentStatus) => {
     const newStatus = currentStatus === "blocked" ? "active" : "blocked";
+    const uName = users.find((u) => u.id === id)?.name || "User";
+    
     setUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, status: newStatus } : u)),
     );
     if (selected && selected.id === id) {
       setSelected((prev) => ({ ...prev, status: newStatus }));
     }
-    const uName = users.find((u) => u.id === id)?.name || "User";
-    addToast(
-      `${uName} ${newStatus === "blocked" ? "blocked" : "unblocked"}`,
-      newStatus === "blocked" ? "warning" : "success",
-    );
+
+    try {
+      await usersApi.toggleStatus(id, newStatus);
+      addToast(
+        `${uName} ${newStatus === "blocked" ? "blocked" : "unblocked"}`,
+        newStatus === "blocked" ? "warning" : "success",
+      );
+      await loadStats();
+    } catch (err) {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === id ? { ...u, status: currentStatus } : u)),
+      );
+      if (selected && selected.id === id) {
+        setSelected((prev) => ({ ...prev, status: currentStatus }));
+      }
+      addToast(err.message || "Failed to update user status", "error");
+    }
   };
 
-  const deleteUser = (id, name) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    addToast(`${name} deleted successfully`, "error");
+  const handleDeletePrompt = (u) => {
+    setUserToDelete(u);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    setActionLoading(true);
+    try {
+      await usersApi.delete(userToDelete.id);
+      setUsers((prev) => prev.filter((u) => u.id !== userToDelete.id));
+      if (selected && selected.id === userToDelete.id) {
+        setSelected(null);
+      }
+      addToast(`${userToDelete.name} deleted successfully`, "success");
+      setDeleteModalOpen(false);
+      setUserToDelete(null);
+      await loadStats();
+    } catch (err) {
+      addToast(err.message || "Failed to delete user", "error");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleSearchChange = (val) => {
@@ -192,54 +278,55 @@ export default function Users() {
       id: user.id,
       name: user.name,
       email: user.email,
-      phone: user.phone,
-      status: user.status,
+      phone: user.phone === "N/A" ? "" : user.phone,
+      status: user.status || "active",
       tags: user.tags || [],
     });
     setFormOpen(true);
   };
 
-  const handleSaveUser = (e) => {
+  const handleSaveUser = async (e) => {
     e?.preventDefault();
     if (!formUser.name || !formUser.email || !formUser.phone) {
-      addToast("Please fill in all fields", "error");
+      addToast("Please fill in all required fields", "error");
       return;
     }
 
-    if (formMode === "create") {
-      const newId = `USR${String(users.length + 1).padStart(3, "0")}`;
-      const options = { day: "numeric", month: "short", year: "numeric" };
-      const todayStr = new Date().toLocaleDateString("en-GB", options);
-
-      const newUser = {
-        id: newId,
-        name: formUser.name,
-        email: formUser.email,
-        phone: formUser.phone,
-        status: formUser.status,
-        bookings: 0,
-        spent: "₹0",
-        joined: todayStr,
-        avatar: formUser.name
-          .split(" ")
-          .map((w) => w[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase(),
-        tags: formUser.tags || [],
-      };
-      setUsers((prev) => [newUser, ...prev]);
-      addToast(`User ${formUser.name} created successfully!`, "success");
-    } else {
-      setUsers((prev) =>
-        prev.map((u) => (u.id === formUser.id ? { ...u, ...formUser } : u)),
-      );
-      addToast(`User ${formUser.name} updated successfully!`, "success");
-      if (selected && selected.id === formUser.id) {
-        setSelected((prev) => ({ ...prev, ...formUser }));
+    setActionLoading(true);
+    try {
+      if (formMode === "create") {
+        const created = await usersApi.create({
+          name: formUser.name,
+          email: formUser.email,
+          phone: formUser.phone,
+          status: formUser.status || "active",
+          tags: formUser.tags || [],
+        });
+        setUsers((prev) => [created, ...prev]);
+        addToast(`User ${formUser.name} created successfully!`, "success");
+      } else {
+        const updated = await usersApi.update(formUser.id, {
+          name: formUser.name,
+          email: formUser.email,
+          phone: formUser.phone,
+          status: formUser.status,
+          tags: formUser.tags,
+        });
+        setUsers((prev) =>
+          prev.map((u) => (u.id === formUser.id ? { ...u, ...updated } : u)),
+        );
+        if (selected && selected.id === formUser.id) {
+          setSelected((prev) => ({ ...prev, ...updated }));
+        }
+        addToast(`User ${formUser.name} updated successfully!`, "success");
       }
+      setFormOpen(false);
+      await loadStats();
+    } catch (err) {
+      addToast(err.message || "Failed to save user", "error");
+    } finally {
+      setActionLoading(false);
     }
-    setFormOpen(false);
   };
 
   const filtered = users.filter((u) => {
@@ -1199,7 +1286,7 @@ export default function Users() {
     <div>
       <PageHeader
         title="User Management"
-        subtitle={`${users.length} total users registered`}
+        subtitle={`${stats.total || users.length} total users registered in platform`}
         actions={
           <>
             <button
@@ -1211,8 +1298,18 @@ export default function Users() {
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => {
-                exportToCSV(filtered, "users_export.csv");
-                addToast("Users data exported to CSV!", "success");
+                const exportData = filtered.map((u) => ({
+                  "User ID": u.usrCode || u.id,
+                  "Full Name": u.name,
+                  "Email Address": u.email,
+                  "Phone Number": u.phone,
+                  "Account Status": (u.status || "active").toUpperCase(),
+                  "Total Bookings": u.bookingsCount ?? u.bookings ?? 0,
+                  "Total Spent": u.totalSpent || u.spent || "₹0",
+                  "Joined Date": u.joined,
+                }));
+                exportToCSV(exportData, `its_global_users_${new Date().toISOString().slice(0, 10)}.csv`);
+                addToast("Users exported to CSV successfully!", "success");
               }}
             >
               <Download size={14} /> Export CSV
@@ -1224,22 +1321,22 @@ export default function Users() {
       {/* Stats Row */}
       <div className="grid-4" style={{ marginBottom: 20 }}>
         {[
-          { label: "Total Users", val: users.length, color: "#3b82f6", filterKey: "all" },
+          { label: "Total Users", val: stats.total ?? users.length, color: "#3b82f6", filterKey: "all" },
           {
             label: "Active",
-            val: users.filter((u) => u.status === "active").length,
+            val: stats.active ?? users.filter((u) => u.status === "active").length,
             color: "#22c55e",
             filterKey: "active",
           },
           {
             label: "Inactive",
-            val: users.filter((u) => u.status === "inactive").length,
+            val: stats.inactive ?? users.filter((u) => u.status === "inactive").length,
             color: "#9ca3af",
             filterKey: "inactive",
           },
           {
             label: "Blocked",
-            val: users.filter((u) => u.status === "blocked").length,
+            val: stats.blocked ?? users.filter((u) => u.status === "blocked").length,
             color: "#ef4444",
             filterKey: "blocked",
           },
@@ -1594,7 +1691,7 @@ export default function Users() {
                         className="btn btn-ghost btn-icon btn-sm"
                         title="Delete User"
                         style={{ color: "var(--danger-500)" }}
-                        onClick={() => deleteUser(u.id, u.name)}
+                        onClick={() => handleDeletePrompt(u)}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -1624,11 +1721,16 @@ export default function Users() {
             <button
               className="btn btn-secondary"
               onClick={() => setFormOpen(false)}
+              disabled={actionLoading}
             >
               Cancel
             </button>
-            <button className="btn btn-primary" onClick={handleSaveUser}>
-              {formMode === "create" ? "Create User" : "Save Changes"}
+            <button 
+              className="btn btn-primary" 
+              onClick={handleSaveUser}
+              disabled={actionLoading}
+            >
+              {actionLoading ? "Saving..." : formMode === "create" ? "Create User" : "Save Changes"}
             </button>
           </>
         }
@@ -1697,6 +1799,41 @@ export default function Users() {
             suggestions={USER_TAGS}
           />
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        open={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Confirm User Deletion"
+        footer={
+          <>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setDeleteModalOpen(false)}
+              disabled={actionLoading}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={handleConfirmDelete}
+              disabled={actionLoading}
+              style={{ background: "var(--danger-600)", color: "#fff" }}
+            >
+              {actionLoading ? "Deleting..." : "Delete User"}
+            </button>
+          </>
+        }
+      >
+        <div style={{ padding: "10px 0" }}>
+          <p style={{ fontSize: 14, color: "var(--text-primary)", marginBottom: 8 }}>
+            Are you sure you want to delete user <strong>{userToDelete?.name}</strong> (ID: {userToDelete?.id})?
+          </p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
+            This will mark the user record as deleted and disable their account access.
+          </p>
+        </div>
       </Modal>
     </div>
   );

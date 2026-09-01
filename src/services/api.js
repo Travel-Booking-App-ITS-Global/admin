@@ -304,10 +304,93 @@ export const authService = {
   },
 };
 
+/**
+ * Enterprise Admin Users Management Service
+ */
+export const usersApi = {
+  /**
+   * Get User KPI counts (total, active, inactive, blocked)
+   */
+  async getStats() {
+    const res = await apiRequest('/admin/users/stats');
+    return res?.data || res;
+  },
+
+  /**
+   * Get list of users with search, status filter, and pagination
+   */
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.sortBy) query.append('sortBy', params.sortBy);
+    if (params.sortOrder) query.append('sortOrder', params.sortOrder);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest(`/admin/users${queryString}`);
+    return res?.data || res;
+  },
+
+  /**
+   * Get complete user profile with booking records
+   */
+  async getById(id) {
+    const res = await apiRequest(`/admin/users/${id}`);
+    return res?.data || res;
+  },
+
+  /**
+   * Create a new customer / user
+   */
+  async create(userData) {
+    const res = await apiRequest('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Update existing user details
+   */
+  async update(id, userData) {
+    const res = await apiRequest(`/admin/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(userData),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Toggle user active/blocked status
+   */
+  async toggleStatus(id, status) {
+    const res = await apiRequest(`/admin/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Delete user account (soft delete)
+   */
+  async delete(id) {
+    const res = await apiRequest(`/admin/users/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
 export default {
   API_BASE_URL,
   apiRequest,
   authService,
+  usersApi,
   decodeJwt,
   isTokenExpired,
 };
+
