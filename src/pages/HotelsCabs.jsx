@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Eye, Star, MapPin, Plus, XCircle, CheckCircle, Edit, FileText, AlertTriangle, ShieldCheck, LayoutGrid, List, Download, Loader2, Trash2 } from "lucide-react";
+import { Eye, Star, MapPin, Plus, XCircle, CheckCircle, Edit, FileText, AlertTriangle, AlertCircle, ShieldCheck, LayoutGrid, List, Download, Loader2, Trash2 } from "lucide-react";
 import {
   PageHeader,
   StatusBadge,
@@ -16,7 +16,7 @@ import {
 import { useApp } from "../store/AppContext.jsx";
 import { exportToCSV } from "../utils/export.js";
 import { useLocation } from "react-router-dom";
-import { driversApi } from "../services/api.js";
+import { driversApi, vehiclesApi } from "../services/api.js";
 
 const HOTEL_TAGS = [
   "Luxury", "Budget", "Heritage", "Resort", "Business",
@@ -733,6 +733,8 @@ export function Cabs() {
   const [driversViewMode, setDriversViewMode] = useState("table");
   const [vehiclesViewMode, setVehiclesViewMode] = useState("table");
 
+  const perPage = 10;
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get("tab");
@@ -764,6 +766,7 @@ export function Cabs() {
   const [driverActionLoading, setDriverActionLoading] = useState(false);
   const [deleteDriverModalOpen, setDeleteDriverModalOpen] = useState(false);
   const [driverToDelete, setDriverToDelete] = useState(null);
+  const [driverErrors, setDriverErrors] = useState({});
 
   const loadDrivers = useCallback(async (pageToLoad = driversPage, searchToUse = driverSearch) => {
     setDriversLoading(true);
@@ -796,57 +799,43 @@ export function Cabs() {
     }
   }, [tab, driversPage, driverSearch, loadDrivers]);
 
-  // Detailed compliance vehicles database
-  const [vehicles, setVehicles] = useState([
-    {
-      id: "VEH001",
-      model: "Swift Dzire",
-      plate: "KL07AE4521",
-      rcNumber: "RC-KL07-2022-9012",
-      pucExpiry: "2026-12-15",
-      insuranceNo: "INS-HDFC-98212",
-      insuranceExpiry: "2026-05-20",
-      permit: "State Taxi Permit",
-      status: "active",
-      driver: "Ramu Kumar",
-    },
-    {
-      id: "VEH002",
-      model: "Innova Crysta",
-      plate: "KL09BC8812",
-      rcNumber: "RC-KL09-2023-8812",
-      pucExpiry: "2026-09-30",
-      insuranceNo: "INS-ICICI-44129",
-      insuranceExpiry: "2026-03-12",
-      permit: "All India Tourist Permit (AITP)",
-      status: "active",
-      driver: "Suresh Pillai",
-    },
-    {
-      id: "VEH003",
-      model: "Toyota Etios",
-      plate: "MH01ZZ9923",
-      rcNumber: "RC-MH01-2021-0023",
-      pucExpiry: "2026-02-18",
-      insuranceNo: "INS-SBI-20098",
-      insuranceExpiry: "2026-11-04",
-      permit: "State Taxi Permit",
-      status: "active",
-      driver: "Mohan Das",
-    },
-    {
-      id: "VEH004",
-      model: "Swift Dzire",
-      plate: "DL05AB3341",
-      rcNumber: "RC-DL05-2023-3341",
-      pucExpiry: "2025-10-22",
-      insuranceNo: "INS-NIA-88210",
-      insuranceExpiry: "2026-08-15",
-      permit: "Local NCR Taxi Permit",
-      status: "inactive",
-      driver: "Rajesh Tiwari",
-    },
-  ]);
+  // Dynamic compliance vehicles database from backend API
+  const [vehicles, setVehicles] = useState([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
+  const [vehiclesTotal, setVehiclesTotal] = useState(0);
+  const [vehicleActionLoading, setVehicleActionLoading] = useState(false);
+  const [deleteVehicleModalOpen, setDeleteVehicleModalOpen] = useState(false);
+  const [vehicleToDelete, setVehicleToDelete] = useState(null);
+  const [vehicleErrors, setVehicleErrors] = useState({});
+
+  const loadVehicles = useCallback(async (pageToLoad = vehiclesPage, searchToUse = vehicleSearch) => {
+    setVehiclesLoading(true);
+    try {
+      const res = await vehiclesApi.getAll({
+        page: pageToLoad,
+        limit: perPage,
+        search: searchToUse,
+      });
+      if (res && Array.isArray(res.items)) {
+        setVehicles(res.items);
+        setVehiclesTotal(res.pagination?.total ?? res.items.length);
+      } else {
+        setVehicles([]);
+        setVehiclesTotal(0);
+      }
+    } catch (err) {
+      console.warn("Could not load vehicles from API:", err);
+      setVehicles([]);
+    } finally {
+      setVehiclesLoading(false);
+    }
+  }, [vehiclesPage, vehicleSearch, perPage]);
+
+  useEffect(() => {
+    if (tab === "vehicles") {
+      loadVehicles(vehiclesPage, vehicleSearch);
+    }
+  }, [tab, vehiclesPage, vehicleSearch, loadVehicles]);
 
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
@@ -907,6 +896,15 @@ export function Cabs() {
     driver: "Unassigned",
     tags: [],
   });
+
+  // Sync available vehicles into Assigned Vehicle dropdown when Driver Modal is open
+  useEffect(() => {
+    if (addDriverOpen || editDriverOpen) {
+      vehiclesApi.getAll({ limit: 100 }).then((res) => {
+        if (res && Array.isArray(res.items)) setVehicles(res.items);
+      }).catch(() => {});
+    }
+  }, [addDriverOpen, editDriverOpen]);
 
   // Rides handlers
   const handleOpenAddRideModal = () => {
@@ -982,6 +980,7 @@ export function Cabs() {
       photo: "",
       tags: [],
     });
+    setDriverErrors({});
     setAddDriverOpen(true);
   };
 
@@ -990,6 +989,7 @@ export function Cabs() {
       ...driver,
       tags: driver.tags || [],
     });
+    setDriverErrors({});
     setEditDriverOpen(true);
   };
 
@@ -1011,40 +1011,61 @@ export function Cabs() {
 
   const handleSaveDriver = async (e) => {
     e?.preventDefault();
-    if (
-      !formDriver.name?.trim() ||
-      !formDriver.phone?.trim() ||
-      !formDriver.city?.trim() ||
-      !formDriver.aadhar?.trim() ||
-      !formDriver.pan?.trim() ||
-      !formDriver.dlNumber?.trim() ||
-      !formDriver.dlExpiry?.trim()
-    ) {
-      addToast("Please provide all required registration documents", "error");
-      return;
+    const errors = {};
+
+    if (!formDriver.name?.trim()) {
+      errors.name = "Driver name is required";
+    }
+    if (!formDriver.phone?.trim()) {
+      errors.phone = "Phone number is required";
+    }
+    if (!formDriver.city?.trim()) {
+      errors.city = "Base city office is required";
     }
 
     // Aadhar Card check (12 Digits)
-    const rawAadhar = formDriver.aadhar.replace(/\s/g, "");
-    if (rawAadhar.length !== 12 || isNaN(rawAadhar)) {
-      addToast("Aadhar Card must be a valid 12-digit number", "error");
-      return;
+    const rawAadhar = (formDriver.aadhar || "").replace(/[\s-]/g, "");
+    if (!rawAadhar) {
+      errors.aadhar = "Aadhar UIDAI is required";
+    } else if (rawAadhar.length !== 12 || isNaN(rawAadhar)) {
+      errors.aadhar = "Aadhar Card must be a valid 12-digit number";
     }
 
-    // PAN Card check (5 letters, 4 numbers, 1 letter)
-    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i;
-    if (!panRegex.test(formDriver.pan.trim())) {
-      addToast("Please enter a valid 10-character PAN number (e.g. ABCDE1234F)", "error");
+    // PAN Card check (10 characters)
+    const cleanPan = (formDriver.pan || "").replace(/\s/g, "").toUpperCase();
+    if (!cleanPan) {
+      errors.pan = "PAN Card number is required";
+    } else if (cleanPan.length !== 10) {
+      errors.pan = "PAN Card must be exactly 10 characters (e.g. ABCDE1234F)";
+    }
+
+    if (!formDriver.dlNumber?.trim()) {
+      errors.dlNumber = "Commercial DL ID is required";
+    }
+    if (!formDriver.dlExpiry?.trim()) {
+      errors.dlExpiry = "DL Expiry Date is required";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setDriverErrors(errors);
+      addToast("Please fill in all required fields correctly", "error");
       return;
     }
 
     const defaultAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
     const finalDriver = {
       ...formDriver,
+      name: formDriver.name.trim(),
+      phone: formDriver.phone.trim(),
+      city: formDriver.city.trim(),
+      aadhar: rawAadhar,
+      pan: cleanPan,
+      dlNumber: formDriver.dlNumber.trim().toUpperCase(),
       photo: formDriver.photo ? formDriver.photo.trim() : defaultAvatar,
     };
 
     setDriverActionLoading(true);
+    setDriverErrors({});
     try {
       if (editDriverOpen) {
         const updated = await driversApi.update(finalDriver.id, finalDriver);
@@ -1059,8 +1080,45 @@ export function Cabs() {
         setAddDriverOpen(false);
       }
       await loadDrivers(driversPage, driverSearch);
+      await loadVehicles(vehiclesPage, vehicleSearch);
     } catch (err) {
-      addToast(err.message || "Failed to save driver dossier", "error");
+      const serverMsg = err.message || "";
+      const srvErrors = {};
+
+      if (/phone/i.test(serverMsg)) {
+        srvErrors.phone = serverMsg;
+      }
+      if (/license|dl/i.test(serverMsg)) {
+        srvErrors.dlNumber = serverMsg;
+      }
+      if (/aadhar/i.test(serverMsg)) {
+        srvErrors.aadhar = serverMsg;
+      }
+      if (/pan/i.test(serverMsg)) {
+        srvErrors.pan = serverMsg;
+      }
+      if (/city/i.test(serverMsg)) {
+        srvErrors.city = serverMsg;
+      }
+      if (/name/i.test(serverMsg) && !srvErrors.name) {
+        srvErrors.name = serverMsg;
+      }
+
+      if (err.data && Array.isArray(err.data.message)) {
+        err.data.message.forEach((m) => {
+          if (/phone/i.test(m)) srvErrors.phone = m;
+          else if (/license|dlNumber/i.test(m)) srvErrors.dlNumber = m;
+          else if (/aadhar/i.test(m)) srvErrors.aadhar = m;
+          else if (/pan/i.test(m)) srvErrors.pan = m;
+          else if (/city/i.test(m)) srvErrors.city = m;
+          else if (/name/i.test(m)) srvErrors.name = m;
+        });
+      }
+
+      if (Object.keys(srvErrors).length > 0) {
+        setDriverErrors(srvErrors);
+      }
+      addToast(serverMsg || "Failed to save driver dossier", "error");
     } finally {
       setDriverActionLoading(false);
     }
@@ -1112,7 +1170,7 @@ export function Cabs() {
   // Vehicles Handlers
   const handleOpenAddVehicleModal = () => {
     setFormVehicle({
-      id: `VEH${100 + vehicles.length + 1}`,
+      id: "",
       model: "",
       plate: "",
       rcNumber: "",
@@ -1124,53 +1182,145 @@ export function Cabs() {
       driver: drivers.length > 0 ? drivers[0].name : "Unassigned",
       tags: [],
     });
+    setVehicleErrors({});
     setAddVehicleOpen(true);
   };
 
   const handleOpenEditVehicleModal = (veh) => {
     setFormVehicle({ ...veh, tags: veh.tags || [] });
+    setVehicleErrors({});
     setEditVehicleOpen(true);
   };
 
-  const handleSaveVehicle = (e) => {
+  const handleSaveVehicle = async (e) => {
     e?.preventDefault();
-    if (
-      !formVehicle.model ||
-      !formVehicle.plate ||
-      !formVehicle.rcNumber ||
-      !formVehicle.pucExpiry ||
-      !formVehicle.insuranceNo ||
-      !formVehicle.insuranceExpiry
-    ) {
-      addToast("Please provide all required vehicle compliance details", "error");
+    const errors = {};
+
+    if (!formVehicle.model?.trim()) {
+      errors.model = "Vehicle make & model is required";
+    }
+    if (!formVehicle.plate?.trim()) {
+      errors.plate = "License plate number is required";
+    }
+    if (!formVehicle.rcNumber?.trim()) {
+      errors.rcNumber = "RC certificate book number is required";
+    }
+    if (!formVehicle.pucExpiry?.trim()) {
+      errors.pucExpiry = "PUC expiry date is required";
+    }
+    if (!formVehicle.insuranceNo?.trim()) {
+      errors.insuranceNo = "Commercial insurance policy number is required";
+    }
+    if (!formVehicle.insuranceExpiry?.trim()) {
+      errors.insuranceExpiry = "Insurance expiry date is required";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setVehicleErrors(errors);
+      addToast("Please fill in all required fields correctly", "error");
       return;
     }
 
-    if (editVehicleOpen) {
-      setVehicles((prev) =>
-        prev.map((v) => (v.id === formVehicle.id ? formVehicle : v))
-      );
-      if (selectedVehicle && selectedVehicle.id === formVehicle.id) {
-        setSelectedVehicle(formVehicle);
+    const finalVehicle = {
+      ...formVehicle,
+      model: formVehicle.model.trim(),
+      plate: formVehicle.plate.trim().toUpperCase(),
+      rcNumber: formVehicle.rcNumber.trim().toUpperCase(),
+      insuranceNo: formVehicle.insuranceNo.trim().toUpperCase(),
+    };
+
+    setVehicleActionLoading(true);
+    setVehicleErrors({});
+    try {
+      if (editVehicleOpen) {
+        const targetId = finalVehicle.numericId || finalVehicle.id;
+        const updated = await vehiclesApi.update(targetId, finalVehicle);
+        addToast(`Vehicle ${finalVehicle.plate} compliance records updated!`, "success");
+        setEditVehicleOpen(false);
+        if (selectedVehicle && (selectedVehicle.id === finalVehicle.id || selectedVehicle.numericId === targetId)) {
+          setSelectedVehicle(updated);
+        }
+      } else {
+        await vehiclesApi.create(finalVehicle);
+        addToast(`Vehicle ${finalVehicle.plate} registered under RTO compliance guidelines!`, "success");
+        setAddVehicleOpen(false);
       }
-      addToast(`Vehicle ${formVehicle.plate} records updated!`, "success");
-      setEditVehicleOpen(false);
-    } else {
-      setVehicles((prev) => [formVehicle, ...prev]);
-      addToast(`Vehicle ${formVehicle.plate} registered in records database!`, "success");
-      setAddVehicleOpen(false);
+      await loadVehicles(vehiclesPage, vehicleSearch);
+      await loadDrivers(driversPage, driverSearch);
+    } catch (err) {
+      const serverMsg = err.message || "";
+      const srvErrors = {};
+
+      if (/plate|registration/i.test(serverMsg)) {
+        srvErrors.plate = serverMsg;
+      }
+      if (/rc/i.test(serverMsg)) {
+        srvErrors.rcNumber = serverMsg;
+      }
+      if (/insurance/i.test(serverMsg)) {
+        srvErrors.insuranceNo = serverMsg;
+      }
+      if (/model/i.test(serverMsg)) {
+        srvErrors.model = serverMsg;
+      }
+
+      if (err.data && Array.isArray(err.data.message)) {
+        err.data.message.forEach((m) => {
+          if (/plate|registration/i.test(m)) srvErrors.plate = m;
+          else if (/rc/i.test(m)) srvErrors.rcNumber = m;
+          else if (/insurance/i.test(m)) srvErrors.insuranceNo = m;
+          else if (/model/i.test(m)) srvErrors.model = m;
+        });
+      }
+
+      if (Object.keys(srvErrors).length > 0) {
+        setVehicleErrors(srvErrors);
+      }
+      addToast(serverMsg || "Failed to save vehicle dossier", "error");
+    } finally {
+      setVehicleActionLoading(false);
     }
   };
 
-  const toggleVehicleStatus = (id, currentStatus) => {
+  const toggleVehicleStatus = async (id, currentStatus) => {
     const nextStatus = currentStatus === "active" ? "inactive" : "active";
-    setVehicles((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, status: nextStatus } : v))
-    );
-    if (selectedVehicle && selectedVehicle.id === id) {
-      setSelectedVehicle((prev) => ({ ...prev, status: nextStatus }));
+    try {
+      await vehiclesApi.toggleStatus(id, nextStatus);
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === id || v.numericId === id ? { ...v, status: nextStatus } : v))
+      );
+      if (selectedVehicle && (selectedVehicle.id === id || selectedVehicle.numericId === id)) {
+        setSelectedVehicle((prev) => ({ ...prev, status: nextStatus }));
+      }
+      addToast(`Vehicle status set to ${nextStatus}`, "success");
+    } catch (err) {
+      addToast(err.message || "Failed to toggle vehicle status", "error");
     }
-    addToast(`Vehicle status set to ${nextStatus}`, "success");
+  };
+
+  const handleDeletePromptVehicle = (veh) => {
+    setVehicleToDelete(veh);
+    setDeleteVehicleModalOpen(true);
+  };
+
+  const handleConfirmDeleteVehicle = async () => {
+    if (!vehicleToDelete) return;
+    setVehicleActionLoading(true);
+    try {
+      const targetId = vehicleToDelete.numericId || vehicleToDelete.id;
+      await vehiclesApi.delete(targetId);
+      addToast(`Vehicle ${vehicleToDelete.plate} archived successfully`, "success");
+      setDeleteVehicleModalOpen(false);
+      setVehicleToDelete(null);
+      if (selectedVehicle && (selectedVehicle.id === vehicleToDelete.id || selectedVehicle.numericId === targetId)) {
+        setSelectedVehicle(null);
+      }
+      await loadVehicles(vehiclesPage, vehicleSearch);
+    } catch (err) {
+      addToast(err.message || "Failed to delete vehicle", "error");
+    } finally {
+      setVehicleActionLoading(false);
+    }
   };
 
   const filteredRides = rides.filter((b) => {
@@ -1183,8 +1333,6 @@ export function Cabs() {
     );
   });
 
-  const perPage = 10;
-
   const totalRidesPages = Math.ceil(filteredRides.length / perPage) || 1;
   const currentRidesPage = ridesPage > totalRidesPages ? 1 : ridesPage;
   const paginatedRides = filteredRides.slice((currentRidesPage - 1) * perPage, currentRidesPage * perPage);
@@ -1193,19 +1341,9 @@ export function Cabs() {
   const currentDriversPage = driversPage;
   const paginatedDrivers = drivers;
 
-  const filteredVehicles = vehicles.filter((v) => {
-    const s = vehicleSearch.toLowerCase();
-    const matchesTags = v.tags && v.tags.some((tag) => tag.toLowerCase().includes(s));
-    return (
-      v.model.toLowerCase().includes(s) ||
-      v.plate.toLowerCase().includes(s) ||
-      matchesTags
-    );
-  });
-
-  const totalVehiclesPages = Math.ceil(filteredVehicles.length / perPage) || 1;
-  const currentVehiclesPage = vehiclesPage > totalVehiclesPages ? 1 : vehiclesPage;
-  const paginatedVehicles = filteredVehicles.slice((currentVehiclesPage - 1) * perPage, currentVehiclesPage * perPage);
+  const filteredVehicles = vehicles;
+  const currentVehiclesPage = vehiclesPage;
+  const paginatedVehicles = vehicles;
 
   return (
     <div>
@@ -1886,7 +2024,16 @@ export function Cabs() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedVehicles.length === 0 && (
+                    {vehiclesLoading ? (
+                      <tr>
+                        <td colSpan={9} style={{ textAlign: "center", padding: 48, color: "var(--text-muted)" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                            <Loader2 size={18} style={{ animation: "spin 0.8s linear infinite", color: "var(--brand-500)" }} />
+                            <span>Loading fleet vehicles registry...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : paginatedVehicles.length === 0 ? (
                       <tr>
                         <td
                           colSpan={9}
@@ -1899,36 +2046,133 @@ export function Cabs() {
                           No registered vehicles found
                         </td>
                       </tr>
+                    ) : (
+                      paginatedVehicles.map((v) => {
+                        const isPucExpiring = new Date(v.pucExpiry) < new Date();
+                        return (
+                          <tr key={v.id}>
+                            <td
+                              style={{
+                                fontFamily: "monospace",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "var(--brand-600)",
+                              }}
+                            >
+                              {v.vehCode || v.id}
+                            </td>
+                            <td>
+                              <div style={{ fontWeight: 600, fontSize: 13 }}>{v.model}</div>
+                              {v.tags && v.tags.length > 0 && (
+                                <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                  {v.tags.map((t) => (
+                                    <span
+                                      key={t}
+                                      style={{
+                                        fontSize: 9,
+                                        background: "rgba(37, 99, 235, 0.08)",
+                                        color: "var(--text-brand)",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        fontWeight: 600,
+                                        border: "1px solid rgba(37, 99, 235, 0.15)",
+                                      }}
+                                    >
+                                      {t}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--text-primary)" }}>{v.plate}</td>
+                            <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{v.rcNumber}</td>
+                            <td>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  background: isPucExpiring ? "rgba(239, 68, 68, 0.15)" : "var(--gray-100)",
+                                  color: isPucExpiring ? "var(--danger-700)" : "var(--text-secondary)",
+                                  padding: "2px 8px",
+                                  borderRadius: "var(--radius-full)",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {v.pucExpiry} {isPucExpiring && "⚠️ Expired"}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: 12, fontWeight: 500 }}>{v.permit}</td>
+                            <td style={{ fontWeight: 600, fontSize: 12 }}>{v.driver}</td>
+                            <td>
+                              <StatusBadge status={v.status} />
+                            </td>
+                            <td>
+                              <div style={{ display: "flex", gap: 4 }}>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => setSelectedVehicle(v)}
+                                >
+                                  Details
+                                </button>
+                                <button
+                                  className="btn btn-ghost btn-icon btn-sm"
+                                  title="Edit Vehicle Specs"
+                                  onClick={() => handleOpenEditVehicleModal(v)}
+                                >
+                                  <Edit size={14} />
+                                </button>
+                                <button
+                                  className="btn btn-ghost btn-icon btn-sm"
+                                  title="Delete Vehicle Record"
+                                  style={{ color: "var(--danger-500)" }}
+                                  onClick={() => handleDeletePromptVehicle(v)}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     )}
-                    {paginatedVehicles.map((v) => {
-                      const isPucExpiring = new Date(v.pucExpiry) < new Date();
-                      return (
-                        <tr key={v.id}>
-                          <td
-                            style={{
-                              fontFamily: "monospace",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: "var(--brand-600)",
-                            }}
-                          >
-                            {v.id}
-                          </td>
-                          <td>
-                            <div style={{ fontWeight: 600, fontSize: 13 }}>{v.model}</div>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="grid-2" style={{ gap: 16, marginTop: 10 }}>
+                {vehiclesLoading ? (
+                  <div style={{ gridColumn: "span 2", textAlign: "center", padding: 48, color: "var(--text-muted)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      <Loader2 size={18} style={{ animation: "spin 0.8s linear infinite", color: "var(--brand-500)" }} />
+                      <span>Loading fleet vehicles registry...</span>
+                    </div>
+                  </div>
+                ) : paginatedVehicles.length === 0 ? (
+                  <div style={{ gridColumn: "span 2", textAlign: "center", padding: 24, color: "var(--text-muted)" }}>
+                    No registered vehicles found
+                  </div>
+                ) : (
+                  paginatedVehicles.map((v) => {
+                    const isPucExpiring = new Date(v.pucExpiry) < new Date();
+                    return (
+                      <div key={v.id} className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                          <div>
+                            <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "var(--brand-600)" }}>{v.vehCode || v.id}</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: "var(--text-primary)" }}>{v.model}</div>
                             {v.tags && v.tags.length > 0 && (
-                              <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
                                 {v.tags.map((t) => (
                                   <span
                                     key={t}
                                     style={{
                                       fontSize: 9,
-                                      background: "rgba(37, 99, 235, 0.08)",
-                                      color: "var(--text-brand)",
-                                      padding: "2px 6px",
+                                      background: "rgba(139, 92, 246, 0.1)",
+                                      color: "var(--accent-600)",
+                                      padding: "1px 6px",
                                       borderRadius: "4px",
-                                      fontWeight: 600,
-                                      border: "1px solid rgba(37, 99, 235, 0.15)",
+                                      fontWeight: 700,
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.02em",
                                     }}
                                   >
                                     {t}
@@ -1936,10 +2180,26 @@ export function Cabs() {
                                 ))}
                               </div>
                             )}
-                          </td>
-                          <td style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--text-primary)" }}>{v.plate}</td>
-                          <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{v.rcNumber}</td>
-                          <td>
+                          </div>
+                          <StatusBadge status={v.status} />
+                        </div>
+
+                        <div style={{ background: "var(--bg-hover)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            <div><span style={{ color: "var(--text-muted)" }}>Registration No:</span> <strong style={{ fontFamily: "monospace" }}>{v.plate}</strong></div>
+                            <div><span style={{ color: "var(--text-muted)" }}>RC Book No:</span> <strong>{v.rcNumber}</strong></div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px", fontSize: 12, marginBottom: 14 }}>
+                          <div style={{ gridColumn: "span 2" }}>
+                            <span style={{ color: "var(--text-muted)" }}>Permit:</span> <strong style={{ color: "var(--text-secondary)" }}>{v.permit}</strong>
+                          </div>
+                          <div>
+                            <span style={{ color: "var(--text-muted)" }}>Driver:</span> <strong style={{ color: "var(--text-secondary)" }}>{v.driver}</strong>
+                          </div>
+                          <div>
+                            <span style={{ color: "var(--text-muted)" }}>PUC Certificate:</span>{" "}
                             <span
                               style={{
                                 fontSize: 11,
@@ -1948,136 +2208,48 @@ export function Cabs() {
                                 padding: "2px 8px",
                                 borderRadius: "var(--radius-full)",
                                 fontWeight: 600,
+                                display: "inline-block",
+                                marginTop: 2
                               }}
                             >
-                              {v.pucExpiry} {isPucExpiring && "⚠️ Expired"}
+                              {v.pucExpiry} {isPucExpiring && "⚠️"}
                             </span>
-                          </td>
-                          <td style={{ fontSize: 12, fontWeight: 500 }}>{v.permit}</td>
-                          <td style={{ fontWeight: 600, fontSize: 12 }}>{v.driver}</td>
-                          <td>
-                            <StatusBadge status={v.status} />
-                          </td>
-                          <td>
-                            <div style={{ display: "flex", gap: 4 }}>
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => setSelectedVehicle(v)}
-                              >
-                                Details
-                              </button>
-                              <button
-                                className="btn btn-ghost btn-icon btn-sm"
-                                title="Edit Vehicle Specs"
-                                onClick={() => handleOpenEditVehicleModal(v)}
-                              >
-                                <Edit size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="grid-2" style={{ gap: 16, marginTop: 10 }}>
-                {paginatedVehicles.length === 0 && (
-                  <div style={{ gridColumn: "span 2", textAlign: "center", padding: 24, color: "var(--text-muted)" }}>
-                    No registered vehicles found
-                  </div>
-                )}
-                {paginatedVehicles.map((v) => {
-                  const isPucExpiring = new Date(v.pucExpiry) < new Date();
-                  return (
-                    <div key={v.id} className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                        <div>
-                          <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "var(--brand-600)" }}>{v.id}</div>
-                          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: "var(--text-primary)" }}>{v.model}</div>
-                          {v.tags && v.tags.length > 0 && (
-                            <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
-                              {v.tags.map((t) => (
-                                <span
-                                  key={t}
-                                  style={{
-                                    fontSize: 9,
-                                    background: "rgba(139, 92, 246, 0.1)",
-                                    color: "var(--accent-600)",
-                                    padding: "1px 6px",
-                                    borderRadius: "4px",
-                                    fontWeight: 700,
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.02em",
-                                  }}
-                                >
-                                  {t}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          </div>
                         </div>
-                        <StatusBadge status={v.status} />
-                      </div>
 
-                      <div style={{ background: "var(--bg-hover)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12 }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                          <div><span style={{ color: "var(--text-muted)" }}>Registration No:</span> <strong style={{ fontFamily: "monospace" }}>{v.plate}</strong></div>
-                          <div><span style={{ color: "var(--text-muted)" }}>RC Book No:</span> <strong>{v.rcNumber}</strong></div>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px", fontSize: 12, marginBottom: 14 }}>
-                        <div style={{ gridColumn: "span 2" }}>
-                          <span style={{ color: "var(--text-muted)" }}>Permit:</span> <strong style={{ color: "var(--text-secondary)" }}>{v.permit}</strong>
-                        </div>
-                        <div>
-                          <span style={{ color: "var(--text-muted)" }}>Driver:</span> <strong style={{ color: "var(--text-secondary)" }}>{v.driver}</strong>
-                        </div>
-                        <div>
-                          <span style={{ color: "var(--text-muted)" }}>PUC Certificate:</span>{" "}
-                          <span
-                            style={{
-                              fontSize: 11,
-                              background: isPucExpiring ? "rgba(239, 68, 68, 0.15)" : "var(--gray-100)",
-                              color: isPucExpiring ? "var(--danger-700)" : "var(--text-secondary)",
-                              padding: "2px 8px",
-                              borderRadius: "var(--radius-full)",
-                              fontWeight: 600,
-                              display: "inline-block",
-                              marginTop: 2
-                            }}
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--border-default)", paddingTop: 12 }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => setSelectedVehicle(v)}
                           >
-                            {v.pucExpiry} {isPucExpiring && "⚠️"}
-                          </span>
+                            Details
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            title="Edit Vehicle Specs"
+                            onClick={() => handleOpenEditVehicleModal(v)}
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            title="Delete Vehicle Record"
+                            style={{ color: "var(--danger-500)" }}
+                            onClick={() => handleDeletePromptVehicle(v)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
-
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--border-default)", paddingTop: 12 }}>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setSelectedVehicle(v)}
-                        >
-                          Details
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-icon btn-sm"
-                          title="Edit Vehicle Specs"
-                          onClick={() => handleOpenEditVehicleModal(v)}
-                        >
-                          <Edit size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             )}
 
             <Pagination
               page={currentVehiclesPage}
-              total={filteredVehicles.length}
+              total={vehiclesTotal}
               perPage={perPage}
               onChange={setVehiclesPage}
             />
@@ -2498,13 +2670,14 @@ export function Cabs() {
       >
         <form
           onSubmit={handleSaveDriver}
+          noValidate
           style={{ display: "flex", flexDirection: "column", gap: 14 }}
         >
           <div style={{ background: "rgba(59, 130, 246, 0.1)", border: "1px solid rgba(59, 130, 246, 0.3)", borderRadius: 8, padding: 12, fontSize: 12, color: "var(--brand-700)" }}>
             <strong>Regulatory Requirements:</strong> Under the Indian Motor Vehicles Act guidelines, UID Aadhar, Income Tax PAN card, and commercial Driving License documentation checks are mandatory.
           </div>
           <div className="form-group">
-            <label className="form-label" style={{ display: "block", marginBottom: 6 }}>Driver Profile Photo *</label>
+            <label className="form-label" style={{ display: "block", marginBottom: 6 }}>Driver Profile Photo</label>
             <div style={{ display: "flex", gap: 16, alignItems: "center", background: "var(--bg-hover)", padding: 12, borderRadius: 8, border: "1px solid var(--border-default)" }}>
               <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--gray-200)", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid var(--border-default)" }}>
                 {formDriver.photo ? (
@@ -2551,11 +2724,17 @@ export function Cabs() {
               className="form-input"
               placeholder="e.g. Ramesh Kumar"
               value={formDriver.name}
-              onChange={(e) =>
-                setFormDriver({ ...formDriver, name: e.target.value })
-              }
-              required
+              style={driverErrors.name ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+              onChange={(e) => {
+                setFormDriver({ ...formDriver, name: e.target.value });
+                if (driverErrors.name) setDriverErrors((prev) => ({ ...prev, name: null }));
+              }}
             />
+            {driverErrors.name && (
+              <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                <AlertCircle size={12} /> {driverErrors.name}
+              </div>
+            )}
           </div>
           <div className="grid-2" style={{ gap: 12 }}>
             <div className="form-group">
@@ -2564,11 +2743,17 @@ export function Cabs() {
                 className="form-input"
                 placeholder="e.g. +91 98765 43210"
                 value={formDriver.phone}
-                onChange={(e) =>
-                  setFormDriver({ ...formDriver, phone: e.target.value })
-                }
-                required
+                style={driverErrors.phone ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                onChange={(e) => {
+                  setFormDriver({ ...formDriver, phone: e.target.value });
+                  if (driverErrors.phone) setDriverErrors((prev) => ({ ...prev, phone: null }));
+                }}
               />
+              {driverErrors.phone && (
+                <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                  <AlertCircle size={12} /> {driverErrors.phone}
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Base City Office *</label>
@@ -2576,11 +2761,17 @@ export function Cabs() {
                 className="form-input"
                 placeholder="e.g. Kochi"
                 value={formDriver.city}
-                onChange={(e) =>
-                  setFormDriver({ ...formDriver, city: e.target.value })
-                }
-                required
+                style={driverErrors.city ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                onChange={(e) => {
+                  setFormDriver({ ...formDriver, city: e.target.value });
+                  if (driverErrors.city) setDriverErrors((prev) => ({ ...prev, city: null }));
+                }}
               />
+              {driverErrors.city && (
+                <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                  <AlertCircle size={12} /> {driverErrors.city}
+                </div>
+              )}
             </div>
           </div>
 
@@ -2593,11 +2784,17 @@ export function Cabs() {
                   className="form-input"
                   placeholder="xxxx xxxx xxxx"
                   value={formDriver.aadhar}
-                  onChange={(e) =>
-                    setFormDriver({ ...formDriver, aadhar: e.target.value })
-                  }
-                  required
+                  style={driverErrors.aadhar ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                  onChange={(e) => {
+                    setFormDriver({ ...formDriver, aadhar: e.target.value });
+                    if (driverErrors.aadhar) setDriverErrors((prev) => ({ ...prev, aadhar: null }));
+                  }}
                 />
+                {driverErrors.aadhar && (
+                  <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                    <AlertCircle size={12} /> {driverErrors.aadhar}
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">PAN Card Number *</label>
@@ -2606,11 +2803,17 @@ export function Cabs() {
                   placeholder="e.g. ABCDE1234F"
                   maxLength={10}
                   value={formDriver.pan}
-                  onChange={(e) =>
-                    setFormDriver({ ...formDriver, pan: e.target.value.toUpperCase() })
-                  }
-                  required
+                  style={driverErrors.pan ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                  onChange={(e) => {
+                    setFormDriver({ ...formDriver, pan: e.target.value.toUpperCase() });
+                    if (driverErrors.pan) setDriverErrors((prev) => ({ ...prev, pan: null }));
+                  }}
                 />
+                {driverErrors.pan && (
+                  <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                    <AlertCircle size={12} /> {driverErrors.pan}
+                  </div>
+                )}
               </div>
             </div>
             <div className="grid-2" style={{ gap: 12, marginTop: 8 }}>
@@ -2620,11 +2823,17 @@ export function Cabs() {
                   className="form-input"
                   placeholder="e.g. DL-1420180098234"
                   value={formDriver.dlNumber}
-                  onChange={(e) =>
-                    setFormDriver({ ...formDriver, dlNumber: e.target.value.toUpperCase() })
-                  }
-                  required
+                  style={driverErrors.dlNumber ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                  onChange={(e) => {
+                    setFormDriver({ ...formDriver, dlNumber: e.target.value.toUpperCase() });
+                    if (driverErrors.dlNumber) setDriverErrors((prev) => ({ ...prev, dlNumber: null }));
+                  }}
                 />
+                {driverErrors.dlNumber && (
+                  <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                    <AlertCircle size={12} /> {driverErrors.dlNumber}
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">DL Expiry Date *</label>
@@ -2632,11 +2841,17 @@ export function Cabs() {
                   type="date"
                   className="form-input"
                   value={formDriver.dlExpiry}
-                  onChange={(e) =>
-                    setFormDriver({ ...formDriver, dlExpiry: e.target.value })
-                  }
-                  required
+                  style={driverErrors.dlExpiry ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                  onChange={(e) => {
+                    setFormDriver({ ...formDriver, dlExpiry: e.target.value });
+                    if (driverErrors.dlExpiry) setDriverErrors((prev) => ({ ...prev, dlExpiry: null }));
+                  }}
                 />
+                {driverErrors.dlExpiry && (
+                  <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                    <AlertCircle size={12} /> {driverErrors.dlExpiry}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2787,6 +3002,7 @@ export function Cabs() {
       >
         <form
           onSubmit={handleSaveVehicle}
+          noValidate
           style={{ display: "flex", flexDirection: "column", gap: 14 }}
         >
           <div className="form-group">
@@ -2796,9 +3012,17 @@ export function Cabs() {
               className="form-input"
               placeholder="e.g. Maruti Suzuki Swift Dzire"
               value={formVehicle.model}
-              onChange={(e) => setFormVehicle({ ...formVehicle, model: e.target.value })}
-              required
+              style={vehicleErrors.model ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+              onChange={(e) => {
+                setFormVehicle({ ...formVehicle, model: e.target.value });
+                if (vehicleErrors.model) setVehicleErrors((prev) => ({ ...prev, model: null }));
+              }}
             />
+            {vehicleErrors.model && (
+              <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                <AlertCircle size={12} /> {vehicleErrors.model}
+              </div>
+            )}
           </div>
           <div className="grid-2" style={{ gap: 12 }}>
             <div className="form-group">
@@ -2808,9 +3032,17 @@ export function Cabs() {
                 className="form-input"
                 placeholder="e.g. DL 1C A 1234"
                 value={formVehicle.plate}
-                onChange={(e) => setFormVehicle({ ...formVehicle, plate: e.target.value.toUpperCase() })}
-                required
+                style={vehicleErrors.plate ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                onChange={(e) => {
+                  setFormVehicle({ ...formVehicle, plate: e.target.value.toUpperCase() });
+                  if (vehicleErrors.plate) setVehicleErrors((prev) => ({ ...prev, plate: null }));
+                }}
               />
+              {vehicleErrors.plate && (
+                <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                  <AlertCircle size={12} /> {vehicleErrors.plate}
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">RC Certificate Book No. *</label>
@@ -2819,9 +3051,17 @@ export function Cabs() {
                 className="form-input"
                 placeholder="e.g. RC-DL05-2023-3341"
                 value={formVehicle.rcNumber}
-                onChange={(e) => setFormVehicle({ ...formVehicle, rcNumber: e.target.value.toUpperCase() })}
-                required
+                style={vehicleErrors.rcNumber ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                onChange={(e) => {
+                  setFormVehicle({ ...formVehicle, rcNumber: e.target.value.toUpperCase() });
+                  if (vehicleErrors.rcNumber) setVehicleErrors((prev) => ({ ...prev, rcNumber: null }));
+                }}
               />
+              {vehicleErrors.rcNumber && (
+                <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                  <AlertCircle size={12} /> {vehicleErrors.rcNumber}
+                </div>
+              )}
             </div>
           </div>
           <div className="grid-2" style={{ gap: 12 }}>
@@ -2831,9 +3071,17 @@ export function Cabs() {
                 type="date"
                 className="form-input"
                 value={formVehicle.pucExpiry}
-                onChange={(e) => setFormVehicle({ ...formVehicle, pucExpiry: e.target.value })}
-                required
+                style={vehicleErrors.pucExpiry ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                onChange={(e) => {
+                  setFormVehicle({ ...formVehicle, pucExpiry: e.target.value });
+                  if (vehicleErrors.pucExpiry) setVehicleErrors((prev) => ({ ...prev, pucExpiry: null }));
+                }}
               />
+              {vehicleErrors.pucExpiry && (
+                <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                  <AlertCircle size={12} /> {vehicleErrors.pucExpiry}
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">Commercial Insurance Policy No. *</label>
@@ -2842,9 +3090,17 @@ export function Cabs() {
                 className="form-input"
                 placeholder="e.g. INS-NIA-88210"
                 value={formVehicle.insuranceNo}
-                onChange={(e) => setFormVehicle({ ...formVehicle, insuranceNo: e.target.value.toUpperCase() })}
-                required
+                style={vehicleErrors.insuranceNo ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                onChange={(e) => {
+                  setFormVehicle({ ...formVehicle, insuranceNo: e.target.value.toUpperCase() });
+                  if (vehicleErrors.insuranceNo) setVehicleErrors((prev) => ({ ...prev, insuranceNo: null }));
+                }}
               />
+              {vehicleErrors.insuranceNo && (
+                <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                  <AlertCircle size={12} /> {vehicleErrors.insuranceNo}
+                </div>
+              )}
             </div>
           </div>
           <div className="grid-2" style={{ gap: 12 }}>
@@ -2854,9 +3110,17 @@ export function Cabs() {
                 type="date"
                 className="form-input"
                 value={formVehicle.insuranceExpiry}
-                onChange={(e) => setFormVehicle({ ...formVehicle, insuranceExpiry: e.target.value })}
-                required
+                style={vehicleErrors.insuranceExpiry ? { borderColor: "var(--danger-500, #ef4444)", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.15)" } : undefined}
+                onChange={(e) => {
+                  setFormVehicle({ ...formVehicle, insuranceExpiry: e.target.value });
+                  if (vehicleErrors.insuranceExpiry) setVehicleErrors((prev) => ({ ...prev, insuranceExpiry: null }));
+                }}
               />
+              {vehicleErrors.insuranceExpiry && (
+                <div style={{ color: "var(--danger-500, #ef4444)", fontSize: 11, marginTop: 4, display: "flex", alignItems: "center", gap: 4, fontWeight: 500 }}>
+                  <AlertCircle size={12} /> {vehicleErrors.insuranceExpiry}
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label className="form-label">State Permit Classification</label>
@@ -2912,15 +3176,53 @@ export function Cabs() {
                 setAddVehicleOpen(false);
                 setEditVehicleOpen(false);
               }}
+              disabled={vehicleActionLoading}
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              {editVehicleOpen ? "Save Registration" : "Complete Registration"}
+            <button type="submit" className="btn btn-primary" disabled={vehicleActionLoading}>
+              {vehicleActionLoading
+                ? "Saving Vehicle..."
+                : editVehicleOpen
+                ? "Save Registration"
+                : "Complete Registration"}
             </button>
           </div>
         </form>
       </Modal>
+
+      {/* Delete Vehicle Confirmation Modal */}
+      <Modal
+        open={deleteVehicleModalOpen}
+        onClose={() => setDeleteVehicleModalOpen(false)}
+        title="Remove Vehicle Record"
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--text-secondary)" }}>
+            Are you sure you want to remove vehicle <strong>{vehicleToDelete?.model}</strong> ({vehicleToDelete?.plate})?
+            This will archive the vehicle record from the active fleet inventory.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setDeleteVehicleModalOpen(false)}
+              disabled={vehicleActionLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={handleConfirmDeleteVehicle}
+              disabled={vehicleActionLoading}
+            >
+              {vehicleActionLoading ? "Removing..." : "Delete Vehicle"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
+

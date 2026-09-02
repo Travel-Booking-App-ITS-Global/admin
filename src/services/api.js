@@ -390,6 +390,14 @@ export const usersApi = {
  */
 export const driversApi = {
   /**
+   * Get Drivers KPI counts (total, active, busy, inactive, verified, pending)
+   */
+  async getStats() {
+    const res = await apiRequest('/admin/cabs/drivers/stats');
+    return res?.data || res;
+  },
+
+  /**
    * Get list of drivers with search, status filter, and pagination
    */
   async getAll(params = {}) {
@@ -398,11 +406,12 @@ export const driversApi = {
     if (params.limit) query.append('limit', params.limit);
     if (params.search) query.append('search', params.search);
     if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.verification && params.verification !== 'all') query.append('verification', params.verification);
     if (params.sortBy) query.append('sortBy', params.sortBy);
     if (params.sortOrder) query.append('sortOrder', params.sortOrder);
 
     const queryString = query.toString() ? `?${query.toString()}` : '';
-    const res = await apiRequest(`/admin/drivers${queryString}`);
+    const res = await apiRequest(`/admin/cabs/drivers${queryString}`);
     return res?.data || res;
   },
 
@@ -410,7 +419,7 @@ export const driversApi = {
    * Get complete driver profile
    */
   async getById(id) {
-    const res = await apiRequest(`/admin/drivers/${id}`);
+    const res = await apiRequest(`/admin/cabs/drivers/${id}`);
     return res?.data || res;
   },
 
@@ -418,7 +427,7 @@ export const driversApi = {
    * Create a new driver
    */
   async create(driverData) {
-    const res = await apiRequest('/admin/drivers', {
+    const res = await apiRequest('/admin/cabs/drivers', {
       method: 'POST',
       body: JSON.stringify(driverData),
     });
@@ -429,7 +438,7 @@ export const driversApi = {
    * Update existing driver details
    */
   async update(id, driverData) {
-    const res = await apiRequest(`/admin/drivers/${id}`, {
+    const res = await apiRequest(`/admin/cabs/drivers/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(driverData),
     });
@@ -440,7 +449,7 @@ export const driversApi = {
    * Toggle driver active/blocked status
    */
   async toggleStatus(id, status) {
-    const res = await apiRequest(`/admin/drivers/${id}/status`, {
+    const res = await apiRequest(`/admin/cabs/drivers/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
@@ -451,7 +460,7 @@ export const driversApi = {
    * Delete driver account (soft delete)
    */
   async delete(id) {
-    const res = await apiRequest(`/admin/drivers/${id}`, {
+    const res = await apiRequest(`/admin/cabs/drivers/${id}`, {
       method: 'DELETE',
     });
     return res?.data || res;
@@ -518,16 +527,77 @@ export const auditApi = {
   }
 };
 
+/**
+ * Enterprise Admin Fleet Vehicles Registry Service
+ */
+export const vehiclesApi = {
+  async getStats() {
+    const res = await apiRequest('/admin/cabs/vehicles/stats');
+    return res?.data || res;
+  },
+
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.permit && params.permit !== 'all') query.append('permit', params.permit);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest(`/admin/cabs/vehicles${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/cabs/vehicles/${id}`);
+    return res?.data || res;
+  },
+
+  async create(vehicleData) {
+    const res = await apiRequest('/admin/cabs/vehicles', {
+      method: 'POST',
+      body: JSON.stringify(vehicleData),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, vehicleData) {
+    const res = await apiRequest(`/admin/cabs/vehicles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(vehicleData),
+    });
+    return res?.data || res;
+  },
+
+  async toggleStatus(id, status) {
+    const res = await apiRequest(`/admin/cabs/vehicles/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/cabs/vehicles/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
 export default {
   API_BASE_URL,
   apiRequest,
   authService,
   usersApi,
   driversApi,
+  vehiclesApi,
   staffApi,
   rolesApi,
   auditApi,
   decodeJwt,
   isTokenExpired,
 };
+
 
