@@ -24,6 +24,7 @@ import TagSelector from "../components/ui/TagSelector.jsx";
 import { useApp } from "../store/AppContext.jsx";
 import { exportToCSV } from "../utils/export.js";
 import { useLocation } from "react-router-dom";
+import { staffApi, rolesApi, auditApi } from "../services/api.js";
 
 const STAFF_TAGS = [
   "SuperAdmin", "IT Lead", "Finance", "Auditor", "CMS", "Editor",
@@ -188,8 +189,47 @@ const initialLogs = [
 
 export default function Staff() {
   const { addToast } = useApp();
-  const [staffList, setStaffList] = useState(initialStaff);
-  const [logs, setLogs] = useState(initialLogs);
+  const [staffList, setStaffList] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [rolesMatrix, setRolesMatrix] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const arrayToPermsObj = (arr) => {
+    const obj = { dashboard: false, bookings: false, users: false, finance: false, support: false, cms: false, staff: false };
+    (arr || []).forEach(k => obj[k] = true);
+    return obj;
+  };
+
+  const permsObjToArray = (obj) => {
+    return Object.keys(obj).filter(k => obj[k]);
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [staffRes, rolesRes, logsRes] = await Promise.all([
+        staffApi.getAll({ limit: 100 }),
+        rolesApi.getAll(),
+        auditApi.getLogs(50)
+      ]);
+      setStaffList((staffRes.items || []).map(s => ({
+        ...s,
+        joined: new Date(s.joinedDate).toLocaleDateString(),
+        lastActive: s.status,
+        permissions: arrayToPermsObj(s.permissions)
+      })));
+      setRolesMatrix(rolesRes || []);
+      setLogs(logsRes || []);
+    } catch (err) {
+      addToast(err.message || "Failed to fetch data", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
   const [tab, setTab] = useState("roster"); // "roster", "logs", "roles"
   const [search, setSearch] = useState("");
   const location = useLocation();
@@ -334,68 +374,39 @@ export default function Staff() {
     setAddOpen(true);
   };
 
-  const handleCreateStaff = (e) => {
+  const handleCreateStaff = async (e) => {
     e.preventDefault();
     if (!formStaff.name || !formStaff.email || !formStaff.phone) {
       addToast("Please fill all mandatory fields", "error");
       return;
     }
 
-    const newMember = {
-      id: `STF00${staffList.length + 1}`,
-      name: formStaff.name,
-      email: formStaff.email,
-      phone: formStaff.phone,
-      role: formStaff.role,
-      status: "active",
-      joined: "Today",
-      lastActive: "Never",
-      tags: formStaff.tags || [],
-      permissions: formStaff.permissions,
-    };
-
-    setStaffList([newMember, ...staffList]);
-    setLogs([
-      {
-        id: `LOG${Date.now().toString().slice(-3)}`,
-        staff: "Super Admin",
-        role: "Super Admin",
-        action: `Onboarded new staff member '${formStaff.name}' as ${formStaff.role}`,
-        time: "Just now",
-        ip: "192.168.1.5",
-      },
-      ...logs,
-    ]);
-
-    addToast(`Staff '${formStaff.name}' onboarded successfully!`, "success");
-    setAddOpen(false);
+    try {
+      await staffApi.create({
+        name: formStaff.name,
+        email: formStaff.email,
+        phone: formStaff.phone,
+        role: formStaff.role,
+        department: "Operations",
+        permissions: permsObjToArray(formStaff.permissions)
+      });
+      addToast(`Staff '${formStaff.name}' onboarded successfully!`, "success");
+      setAddOpen(false);
+      fetchData();
+    } catch (err) {
+      addToast(err.message || "Failed to create staff", "error");
+    }
   };
 
-  const handleToggleStaffStatus = (id) => {
-    setStaffList((prev) =>
-      prev.map((member) => {
-        if (member.id === id) {
-          const nextStatus = member.status === "active" ? "inactive" : "active";
-          addToast(`Staff status updated to ${nextStatus}`, "info");
-
-          // Log action
-          setLogs([
-            {
-              id: `LOG${Date.now().toString().slice(-3)}`,
-              staff: "Super Admin",
-              role: "Super Admin",
-              action: `Changed status of ${member.name} to ${nextStatus.toUpperCase()}`,
-              time: "Just now",
-              ip: "192.168.1.5",
-            },
-            ...logs,
-          ]);
-
-          return { ...member, status: nextStatus };
-        }
-        return member;
-      }),
-    );
+  const handleToggleStaffStatus = async (id, currentStatus) => {
+    try {
+      const nextStatus = currentStatus === "active" ? "inactive" : "active";
+      await staffApi.update(id, { status: nextStatus });
+      addToast(`Staff status updated to ${nextStatus}`, "info");
+      fetchData();
+    } catch (err) {
+      addToast(err.message || "Failed to update status", "error");
+    }
   };
 
   const handleOpenPermissions = (member) => {
@@ -409,36 +420,33 @@ export default function Staff() {
     setPermissionsOpen(true);
   };
 
-  const handleSavePermissions = () => {
-    setStaffList((prev) =>
-      prev.map((member) => {
-        if (member.id === selectedStaff.id) {
-          // Log permissions update
-          setLogs([
-            {
-              id: `LOG${Date.now().toString().slice(-3)}`,
-              staff: "Super Admin",
-              role: "Super Admin",
-              action: `Updated access permissions for staff '${member.name}'`,
-              time: "Just now",
-              ip: "192.168.1.5",
-            },
-            ...logs,
-          ]);
+  const handleSavePermissions = async () => {
+    try {
+      await staffApi.update(selectedStaff.id, {
+        role: formStaff.role,
+        permissions: permsObjToArray(formStaff.permissions)
+      });
+      addToast("Permissions updated successfully!", "success");
+      setPermissionsOpen(false);
+      fetchData();
+    } catch (err) {
+      addToast(err.message || "Failed to update permissions", "error");
+    }
+  };
 
-          return {
-            ...member,
-            role: formStaff.role,
-            tags: formStaff.tags || [],
-            permissions: formStaff.permissions,
-          };
-        }
-        return member;
-      }),
-    );
-
-    addToast("Permissions updated successfully!", "success");
-    setPermissionsOpen(false);
+  const handleToggleRolePermission = async (roleId, permKey) => {
+    try {
+      const role = rolesMatrix.find(r => r.id === roleId);
+      const newPerms = role.permissions.includes(permKey)
+        ? role.permissions.filter(p => p !== permKey)
+        : [...role.permissions, permKey];
+      
+      await rolesApi.updatePermissions(roleId, newPerms);
+      fetchData();
+      addToast(`Role permissions updated!`, "success");
+    } catch(err) {
+      addToast(err.message || "Failed to update role", "error");
+    }
   };
 
   // Filter roster
@@ -774,7 +782,7 @@ export default function Staff() {
                                     : "btn-success"
                                 }`}
                                 onClick={() =>
-                                  handleToggleStaffStatus(member.id)
+                                  handleToggleStaffStatus(member.id, member.status)
                                 }
                                 style={{ padding: "4px 8px", fontSize: 11 }}
                                 disabled={member.role === "Super Admin"}
@@ -1005,7 +1013,7 @@ export default function Staff() {
                               ? "btn-danger"
                               : "btn-success"
                           }`}
-                          onClick={() => handleToggleStaffStatus(member.id)}
+                          onClick={() => handleToggleStaffStatus(member.id, member.status)}
                           style={{ padding: "4px 8px", fontSize: 11 }}
                           disabled={member.role === "Super Admin"}
                         >
@@ -1110,11 +1118,9 @@ export default function Staff() {
                 <thead>
                   <tr>
                     <th>Module Permission Scope</th>
-                    <th>Super Admin</th>
-                    <th>Booking Manager</th>
-                    <th>Support Lead</th>
-                    <th>Finance Auditor</th>
-                    <th>CMS Manager</th>
+                    {rolesMatrix.map((role) => (
+                      <th key={role.id}>{role.name}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -1130,99 +1136,39 @@ export default function Staff() {
                           </span>
                         </div>
                       </td>
-                      <td style={{ textAlign: "center" }}>
-                        <CheckCircle
-                          size={18}
-                          style={{
-                            color: "var(--success-500)",
-                            display: "inline",
-                          }}
-                        />
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        {["bookings", "cms", "users", "dashboard"].includes(
-                          perm.key,
-                        ) ? (
-                          <CheckCircle
-                            size={18}
-                            style={{
-                              color: "var(--success-500)",
-                              display: "inline",
+                      {rolesMatrix.map((role) => {
+                        const hasPerm = role.permissions.includes(perm.key);
+                        return (
+                          <td 
+                            key={role.id} 
+                            style={{ textAlign: "center", cursor: role.name === "Super Admin" ? "not-allowed" : "pointer" }}
+                            onClick={() => {
+                              if (role.name !== "Super Admin") {
+                                handleToggleRolePermission(role.id, perm.key);
+                              }
                             }}
-                          />
-                        ) : (
-                          <AlertCircle
-                            size={18}
-                            style={{
-                              color: "var(--text-muted)",
-                              opacity: 0.3,
-                              display: "inline",
-                            }}
-                          />
-                        )}
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        {["support", "users", "dashboard"].includes(
-                          perm.key,
-                        ) ? (
-                          <CheckCircle
-                            size={18}
-                            style={{
-                              color: "var(--success-500)",
-                              display: "inline",
-                            }}
-                          />
-                        ) : (
-                          <AlertCircle
-                            size={18}
-                            style={{
-                              color: "var(--text-muted)",
-                              opacity: 0.3,
-                              display: "inline",
-                            }}
-                          />
-                        )}
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        {["finance", "dashboard"].includes(perm.key) ? (
-                          <CheckCircle
-                            size={18}
-                            style={{
-                              color: "var(--success-500)",
-                              display: "inline",
-                            }}
-                          />
-                        ) : (
-                          <AlertCircle
-                            size={18}
-                            style={{
-                              color: "var(--text-muted)",
-                              opacity: 0.3,
-                              display: "inline",
-                            }}
-                          />
-                        )}
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        {["cms", "dashboard"].includes(perm.key) ? (
-                          <CheckCircle
-                            size={18}
-                            style={{
-                              color: "var(--success-500)",
-                              display: "inline",
-                            }}
-                          />
-                        ) : (
-                          <AlertCircle
-                            size={18}
-                            style={{
-                              color: "var(--text-muted)",
-                              opacity: 0.3,
-                              display: "inline",
-                            }}
-                          />
-                        )}
-                      </td>
+                          >
+                            {hasPerm ? (
+                              <CheckCircle
+                                size={18}
+                                style={{
+                                  color: "var(--success-500)",
+                                  display: "inline",
+                                }}
+                              />
+                            ) : (
+                              <AlertCircle
+                                size={18}
+                                style={{
+                                  color: "var(--text-muted)",
+                                  opacity: 0.3,
+                                  display: "inline",
+                                }}
+                              />
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
