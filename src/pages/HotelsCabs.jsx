@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Eye, Star, MapPin, Plus, XCircle, CheckCircle, Edit, FileText, AlertTriangle, ShieldCheck, LayoutGrid, List, Download } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Eye, Star, MapPin, Plus, XCircle, CheckCircle, Edit, FileText, AlertTriangle, ShieldCheck, LayoutGrid, List, Download, Loader2, Trash2 } from "lucide-react";
 import {
   PageHeader,
   StatusBadge,
@@ -16,6 +16,7 @@ import {
 import { useApp } from "../store/AppContext.jsx";
 import { exportToCSV } from "../utils/export.js";
 import { useLocation } from "react-router-dom";
+import { driversApi } from "../services/api.js";
 
 const HOTEL_TAGS = [
   "Luxury", "Budget", "Heritage", "Resort", "Business",
@@ -755,81 +756,45 @@ export function Cabs() {
     }, 0);
   }, [location.search]);
 
-  // Detailed compliance drivers database with profile photos
-  const [drivers, setDrivers] = useState([
-    {
-      id: "DRV001",
-      name: "Ramu Kumar",
-      phone: "+91 98400 11223",
-      vehicle: "Swift Dzire",
-      plate: "KL07AE4521",
-      status: "active",
-      rating: 4.8,
-      rides: 1240,
-      joined: "2022-03-10",
-      city: "Kochi",
-      aadhar: "4532 9012 8834",
-      pan: "ABCDE1234F",
-      dlNumber: "KL-0720150082341",
-      dlExpiry: "2030-05-20",
-      policeVerification: "completed",
-      photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-    },
-    {
-      id: "DRV002",
-      name: "Suresh Pillai",
-      phone: "+91 94471 22334",
-      vehicle: "Innova Crysta",
-      plate: "KL09BC8812",
-      status: "busy",
-      rating: 4.6,
-      rides: 892,
-      joined: "2023-01-05",
-      city: "Kochi",
-      aadhar: "5821 3349 9012",
-      pan: "FGHIJ5678K",
-      dlNumber: "KL-0920180029342",
-      dlExpiry: "2029-08-14",
-      policeVerification: "completed",
-      photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-    },
-    {
-      id: "DRV003",
-      name: "Mohan Das",
-      phone: "+91 90211 33445",
-      vehicle: "Toyota Etios",
-      plate: "MH01ZZ9923",
-      status: "active",
-      rating: 4.9,
-      rides: 2105,
-      joined: "2021-11-12",
-      city: "Mumbai",
-      aadhar: "2294 8832 1190",
-      pan: "LMNOP9012Q",
-      dlNumber: "MH-0120100054231",
-      dlExpiry: "2028-11-10",
-      policeVerification: "completed",
-      photo: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150",
-    },
-    {
-      id: "DRV004",
-      name: "Rajesh Tiwari",
-      phone: "+91 88012 44556",
-      vehicle: "Swift Dzire",
-      plate: "DL05AB3341",
-      status: "inactive",
-      rating: 4.2,
-      rides: 421,
-      joined: "2023-07-20",
-      city: "Delhi",
-      aadhar: "9012 4823 8812",
-      pan: "RSTUV3456W",
-      dlNumber: "DL-0520190038456",
-      dlExpiry: "2027-04-12",
-      policeVerification: "pending",
-      photo: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150",
-    },
-  ]);
+  // Dynamic compliance drivers database from backend API
+  const [drivers, setDrivers] = useState([]);
+  const [driversLoading, setDriversLoading] = useState(true);
+  const [driversTotal, setDriversTotal] = useState(0);
+  const [driversTotalPages, setDriversTotalPages] = useState(1);
+  const [driverActionLoading, setDriverActionLoading] = useState(false);
+  const [deleteDriverModalOpen, setDeleteDriverModalOpen] = useState(false);
+  const [driverToDelete, setDriverToDelete] = useState(null);
+
+  const loadDrivers = useCallback(async (pageToLoad = driversPage, searchToUse = driverSearch) => {
+    setDriversLoading(true);
+    try {
+      const res = await driversApi.getAll({
+        page: pageToLoad,
+        limit: perPage,
+        search: searchToUse,
+      });
+      if (res && Array.isArray(res.items)) {
+        setDrivers(res.items);
+        setDriversTotal(res.pagination?.total ?? res.items.length);
+        setDriversTotalPages(res.pagination?.totalPages ?? 1);
+      } else {
+        setDrivers([]);
+        setDriversTotal(0);
+        setDriversTotalPages(1);
+      }
+    } catch (err) {
+      console.warn("Could not load drivers from API:", err);
+      setDrivers([]);
+    } finally {
+      setDriversLoading(false);
+    }
+  }, [driversPage, driverSearch, perPage]);
+
+  useEffect(() => {
+    if (tab === "drivers") {
+      loadDrivers(driversPage, driverSearch);
+    }
+  }, [tab, driversPage, driverSearch, loadDrivers]);
 
   // Detailed compliance vehicles database
   const [vehicles, setVehicles] = useState([
@@ -996,10 +961,10 @@ export function Cabs() {
     }
   };
 
-  // Drivers Handlers with compliance validation
+  // Drivers Handlers with compliance validation & backend API
   const handleOpenAddDriverModal = () => {
     setFormDriver({
-      id: `DRV${100 + drivers.length + 1}`,
+      id: "",
       name: "",
       phone: "",
       city: "",
@@ -1008,7 +973,7 @@ export function Cabs() {
       status: "active",
       rating: 5.0,
       rides: 0,
-      joined: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      joined: "Today",
       aadhar: "",
       pan: "",
       dlNumber: "",
@@ -1021,7 +986,10 @@ export function Cabs() {
   };
 
   const handleOpenEditDriverModal = (driver) => {
-    setFormDriver({ ...driver, tags: driver.tags || [] });
+    setFormDriver({
+      ...driver,
+      tags: driver.tags || [],
+    });
     setEditDriverOpen(true);
   };
 
@@ -1041,21 +1009,22 @@ export function Cabs() {
     }
   };
 
-  const handleSaveDriver = (e) => {
+  const handleSaveDriver = async (e) => {
     e?.preventDefault();
     if (
-      !formDriver.name ||
-      !formDriver.phone ||
-      !formDriver.aadhar ||
-      !formDriver.pan ||
-      !formDriver.dlNumber ||
-      !formDriver.dlExpiry
+      !formDriver.name?.trim() ||
+      !formDriver.phone?.trim() ||
+      !formDriver.city?.trim() ||
+      !formDriver.aadhar?.trim() ||
+      !formDriver.pan?.trim() ||
+      !formDriver.dlNumber?.trim() ||
+      !formDriver.dlExpiry?.trim()
     ) {
       addToast("Please provide all required registration documents", "error");
       return;
     }
 
-    // Aadhar Card check (12 Digits/formatting)
+    // Aadhar Card check (12 Digits)
     const rawAadhar = formDriver.aadhar.replace(/\s/g, "");
     if (rawAadhar.length !== 12 || isNaN(rawAadhar)) {
       addToast("Aadhar Card must be a valid 12-digit number", "error");
@@ -1063,31 +1032,80 @@ export function Cabs() {
     }
 
     // PAN Card check (5 letters, 4 numbers, 1 letter)
-    const panRegex = /[A-Z]{5}[0-9]{4}[A-Z]{1}/i;
-    if (!panRegex.test(formDriver.pan)) {
-      addToast("Please enter a valid 10-character PAN number", "error");
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i;
+    if (!panRegex.test(formDriver.pan.trim())) {
+      addToast("Please enter a valid 10-character PAN number (e.g. ABCDE1234F)", "error");
       return;
     }
 
     const defaultAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150";
     const finalDriver = {
       ...formDriver,
-      photo: formDriver.photo.trim() || defaultAvatar,
+      photo: formDriver.photo ? formDriver.photo.trim() : defaultAvatar,
     };
 
-    if (editDriverOpen) {
-      setDrivers((prev) =>
-        prev.map((d) => (d.id === finalDriver.id ? finalDriver : d))
-      );
-      if (selectedDriver && selectedDriver.id === finalDriver.id) {
-        setSelectedDriver(finalDriver);
+    setDriverActionLoading(true);
+    try {
+      if (editDriverOpen) {
+        const updated = await driversApi.update(finalDriver.id, finalDriver);
+        addToast(`Driver ${finalDriver.name} compliance logs updated!`, "success");
+        setEditDriverOpen(false);
+        if (selectedDriver && selectedDriver.id === finalDriver.id) {
+          setSelectedDriver(updated);
+        }
+      } else {
+        await driversApi.create(finalDriver);
+        addToast(`Driver ${finalDriver.name} registered under Indian Motor Act guidelines!`, "success");
+        setAddDriverOpen(false);
       }
-      addToast(`Driver ${finalDriver.name} compliance logs updated!`, "success");
-      setEditDriverOpen(false);
-    } else {
-      setDrivers((prev) => [finalDriver, ...prev]);
-      addToast(`Driver ${finalDriver.name} registered under Indian Motor Act guidelines!`, "success");
-      setAddDriverOpen(false);
+      await loadDrivers(driversPage, driverSearch);
+    } catch (err) {
+      addToast(err.message || "Failed to save driver dossier", "error");
+    } finally {
+      setDriverActionLoading(false);
+    }
+  };
+
+  const toggleDriverStatus = async (id, currentStatus) => {
+    const nextStatus = currentStatus === "active" ? "inactive" : "active";
+    try {
+      await driversApi.toggleStatus(id, nextStatus);
+      setDrivers((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, status: nextStatus } : d))
+      );
+      if (selectedDriver && selectedDriver.id === id) {
+        setSelectedDriver((prev) => ({ ...prev, status: nextStatus }));
+      }
+      addToast(
+        `Driver status set to ${nextStatus}`,
+        nextStatus === "active" ? "success" : "warning"
+      );
+    } catch (err) {
+      addToast(err.message || "Failed to update driver status", "error");
+    }
+  };
+
+  const handleDeletePromptDriver = (driver) => {
+    setDriverToDelete(driver);
+    setDeleteDriverModalOpen(true);
+  };
+
+  const handleConfirmDeleteDriver = async () => {
+    if (!driverToDelete) return;
+    setDriverActionLoading(true);
+    try {
+      await driversApi.delete(driverToDelete.id);
+      addToast(`Driver ${driverToDelete.name} removed successfully`, "success");
+      setDeleteDriverModalOpen(false);
+      setDriverToDelete(null);
+      if (selectedDriver && selectedDriver.id === driverToDelete.id) {
+        setSelectedDriver(null);
+      }
+      await loadDrivers(driversPage, driverSearch);
+    } catch (err) {
+      addToast(err.message || "Failed to delete driver", "error");
+    } finally {
+      setDriverActionLoading(false);
     }
   };
 
@@ -1144,20 +1162,6 @@ export function Cabs() {
     }
   };
 
-  const toggleDriverStatus = (id, currentStatus) => {
-    const nextStatus = currentStatus === "active" ? "inactive" : "active";
-    setDrivers((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: nextStatus } : d))
-    );
-    if (selectedDriver && selectedDriver.id === id) {
-      setSelectedDriver((prev) => ({ ...prev, status: nextStatus }));
-    }
-    addToast(
-      `Driver status set to ${nextStatus}`,
-      nextStatus === "active" ? "success" : "warning"
-    );
-  };
-
   const toggleVehicleStatus = (id, currentStatus) => {
     const nextStatus = currentStatus === "active" ? "inactive" : "active";
     setVehicles((prev) =>
@@ -1185,19 +1189,9 @@ export function Cabs() {
   const currentRidesPage = ridesPage > totalRidesPages ? 1 : ridesPage;
   const paginatedRides = filteredRides.slice((currentRidesPage - 1) * perPage, currentRidesPage * perPage);
 
-  const filteredDrivers = drivers.filter((d) => {
-    const s = driverSearch.toLowerCase();
-    const matchesTags = d.tags && d.tags.some((tag) => tag.toLowerCase().includes(s));
-    return (
-      d.name.toLowerCase().includes(s) ||
-      d.city.toLowerCase().includes(s) ||
-      matchesTags
-    );
-  });
-
-  const totalDriversPages = Math.ceil(filteredDrivers.length / perPage) || 1;
-  const currentDriversPage = driversPage > totalDriversPages ? 1 : driversPage;
-  const paginatedDrivers = filteredDrivers.slice((currentDriversPage - 1) * perPage, currentDriversPage * perPage);
+  const filteredDrivers = drivers;
+  const currentDriversPage = driversPage;
+  const paginatedDrivers = drivers;
 
   const filteredVehicles = vehicles.filter((v) => {
     const s = vehicleSearch.toLowerCase();
@@ -1564,244 +1558,288 @@ export function Cabs() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedDrivers.length === 0 && (
+                    {driversLoading ? (
                       <tr>
                         <td
                           colSpan={8}
                           style={{
                             textAlign: "center",
-                            padding: 24,
+                            padding: 48,
                             color: "var(--text-muted)",
+                            fontSize: 13,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                            <Loader2 size={18} style={{ animation: "spin 0.8s linear infinite", color: "var(--brand-500)" }} />
+                            <span>Loading drivers registry...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : drivers.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          style={{
+                            textAlign: "center",
+                            padding: 36,
+                            color: "var(--text-muted)",
+                            fontSize: 13,
                           }}
                         >
                           No drivers registered
                         </td>
                       </tr>
-                    )}
-                    {paginatedDrivers.map((d) => (
-                      <tr key={d.id}>
-                        <td>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 10,
-                            }}
-                          >
-                            <Avatar name={d.name} size="sm" src={d.photo} />
-                            <div>
-                              <div style={{ fontWeight: 600, fontSize: 13 }}>
-                                {d.name}
-                              </div>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: "var(--text-muted)",
-                                }}
-                              >
-                                {d.id}
-                              </div>
-                              {d.tags && d.tags.length > 0 && (
-                                <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
-                                  {d.tags.map((t) => (
-                                    <span
-                                      key={t}
-                                      style={{
-                                        fontSize: 9,
-                                        background: "rgba(37, 99, 235, 0.08)",
-                                        color: "var(--text-brand)",
-                                        padding: "2px 6px",
-                                        borderRadius: "4px",
-                                        fontWeight: 600,
-                                        border: "1px solid rgba(37, 99, 235, 0.15)",
-                                      }}
-                                    >
-                                      {t}
-                                    </span>
-                                  ))}
+                    ) : (
+                      drivers.map((d) => (
+                        <tr key={d.id}>
+                          <td>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
+                              }}
+                            >
+                              <Avatar name={d.name} size="sm" src={d.photo} />
+                              <div>
+                                <div style={{ fontWeight: 600, fontSize: 13 }}>
+                                  {d.name}
                                 </div>
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: "var(--text-muted)",
+                                    fontFamily: "monospace",
+                                  }}
+                                >
+                                  {d.drvCode || d.id}
+                                </div>
+                                {d.tags && d.tags.length > 0 && (
+                                  <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                    {d.tags.map((t) => (
+                                      <span
+                                        key={t}
+                                        style={{
+                                          fontSize: 9,
+                                          background: "rgba(37, 99, 235, 0.08)",
+                                          color: "var(--text-brand)",
+                                          padding: "2px 6px",
+                                          borderRadius: "4px",
+                                          fontWeight: 600,
+                                          border: "1px solid rgba(37, 99, 235, 0.15)",
+                                        }}
+                                      >
+                                        {t}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ fontSize: 12 }}>{d.phone}</td>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {d.policeVerification === "completed" ? (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    background: "rgba(34, 197, 94, 0.15)",
+                                    color: "var(--success-700)",
+                                    padding: "2px 8px",
+                                    borderRadius: "var(--radius-full)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 3,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <ShieldCheck size={11} /> Verified
+                                </span>
+                              ) : (
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    background: "rgba(245, 158, 11, 0.15)",
+                                    color: "var(--warning-700)",
+                                    padding: "2px 8px",
+                                    borderRadius: "var(--radius-full)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 3,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <AlertTriangle size={11} /> Pending
+                                </span>
                               )}
                             </div>
-                          </div>
-                        </td>
-                        <td style={{ fontSize: 12 }}>{d.phone}</td>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            {d.policeVerification === "completed" ? (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  background: "rgba(34, 197, 94, 0.15)",
-                                  color: "var(--success-700)",
-                                  padding: "2px 8px",
-                                  borderRadius: "var(--radius-full)",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 3,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                <ShieldCheck size={11} /> Verified
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  background: "rgba(245, 158, 11, 0.15)",
-                                  color: "var(--warning-700)",
-                                  padding: "2px 8px",
-                                  borderRadius: "var(--radius-full)",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 3,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                <AlertTriangle size={11} /> Pending
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td style={{ fontSize: 12, fontFamily: "monospace" }}>
-                          {d.dlExpiry}
-                        </td>
-                        <td>
-                          <StatusBadge status={d.status} />
-                        </td>
-                        <td>
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 3,
-                              fontSize: 12,
-                              fontWeight: 600,
-                            }}
-                          >
-                            <Star
-                              size={12}
-                              style={{ color: "#f59e0b", fill: "#f59e0b" }}
-                            />
-                            {d.rating}
-                          </div>
-                        </td>
-                        <td style={{ fontWeight: 600 }}>
-                          {d.rides.toLocaleString()}
-                        </td>
-                        <td>
-                          <div style={{ display: "flex", gap: 4 }}>
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => setSelectedDriver(d)}
+                          </td>
+                          <td style={{ fontSize: 12, fontFamily: "monospace" }}>
+                            {d.dlExpiry}
+                          </td>
+                          <td>
+                            <StatusBadge status={d.status} />
+                          </td>
+                          <td>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 3,
+                                fontSize: 12,
+                                fontWeight: 600,
+                              }}
                             >
-                              Details
-                            </button>
-                            <button
-                              className="btn btn-ghost btn-icon btn-sm"
-                              title="Edit Driver Profile"
-                              onClick={() => handleOpenEditDriverModal(d)}
-                            >
-                              <Edit size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              <Star
+                                size={12}
+                                style={{ color: "#f59e0b", fill: "#f59e0b" }}
+                              />
+                              {d.rating}
+                            </div>
+                          </td>
+                          <td style={{ fontWeight: 600 }}>
+                            {Number(d.rides || 0).toLocaleString()}
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setSelectedDriver(d)}
+                              >
+                                Details
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-icon btn-sm"
+                                title="Edit Driver Profile"
+                                onClick={() => handleOpenEditDriverModal(d)}
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-icon btn-sm"
+                                title="Delete Driver Dossier"
+                                style={{ color: "var(--danger-500)" }}
+                                onClick={() => handleDeletePromptDriver(d)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             ) : (
               <div className="grid-2" style={{ gap: 16, marginTop: 10 }}>
-                {paginatedDrivers.length === 0 && (
+                {driversLoading ? (
+                  <div style={{ gridColumn: "span 2", textAlign: "center", padding: 48, color: "var(--text-muted)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      <Loader2 size={18} style={{ animation: "spin 0.8s linear infinite", color: "var(--brand-500)" }} />
+                      <span>Loading drivers registry...</span>
+                    </div>
+                  </div>
+                ) : drivers.length === 0 ? (
                   <div style={{ gridColumn: "span 2", textAlign: "center", padding: 24, color: "var(--text-muted)" }}>
                     No drivers registered
                   </div>
-                )}
-                {paginatedDrivers.map((d) => (
-                  <div key={d.id} className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <Avatar name={d.name} size="md" src={d.photo} />
+                ) : (
+                  drivers.map((d) => (
+                    <div key={d.id} className="card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <Avatar name={d.name} size="md" src={d.photo} />
+                          <div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{d.name}</div>
+                            <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)" }}>{d.drvCode || d.id}</div>
+                            {d.tags && d.tags.length > 0 && (
+                              <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                                {d.tags.map((t) => (
+                                  <span
+                                    key={t}
+                                    style={{
+                                      fontSize: 9,
+                                      background: "rgba(139, 92, 246, 0.1)",
+                                      color: "var(--accent-600)",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      fontWeight: 700,
+                                      textTransform: "uppercase",
+                                      letterSpacing: "0.02em",
+                                    }}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <StatusBadge status={d.status} />
+                      </div>
+
+                      <div style={{ background: "var(--bg-hover)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <div><span style={{ color: "var(--text-muted)" }}>Phone:</span> <strong>{d.phone}</strong></div>
+                          <div><span style={{ color: "var(--text-muted)" }}>DL Expiry:</span> <strong style={{ fontFamily: "monospace" }}>{d.dlExpiry}</strong></div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px", fontSize: 12, marginBottom: 14 }}>
                         <div>
-                          <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{d.name}</div>
-                          <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)" }}>{d.id}</div>
-                          {d.tags && d.tags.length > 0 && (
-                            <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
-                              {d.tags.map((t) => (
-                                <span
-                                  key={t}
-                                  style={{
-                                    fontSize: 9,
-                                    background: "rgba(139, 92, 246, 0.1)",
-                                    color: "var(--accent-600)",
-                                    padding: "1px 6px",
-                                    borderRadius: "4px",
-                                    fontWeight: 700,
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.02em",
-                                  }}
-                                >
-                                  {t}
-                                </span>
-                              ))}
-                            </div>
+                          <span style={{ color: "var(--text-muted)" }}>Total Rides:</span> <strong style={{ color: "var(--text-secondary)" }}>{Number(d.rides || 0).toLocaleString()}</strong>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                          <span style={{ color: "var(--text-muted)" }}>Rating:</span>
+                          <Star size={12} style={{ color: "#f59e0b", fill: "#f59e0b" }} />
+                          <strong style={{ color: "var(--text-secondary)" }}>{d.rating}</strong>
+                        </div>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <span style={{ color: "var(--text-muted)" }}>Verification:</span>{" "}
+                          {d.policeVerification === "completed" ? (
+                            <span style={{ color: "var(--success-600)", fontWeight: 600 }}>Verified ✓</span>
+                          ) : (
+                            <span style={{ color: "var(--warning-600)", fontWeight: 600 }}>Pending ⚠️</span>
                           )}
                         </div>
                       </div>
-                      <StatusBadge status={d.status} />
-                    </div>
 
-                    <div style={{ background: "var(--bg-hover)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12 }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <div><span style={{ color: "var(--text-muted)" }}>Phone:</span> <strong>{d.phone}</strong></div>
-                        <div><span style={{ color: "var(--text-muted)" }}>DL Expiry:</span> <strong style={{ fontFamily: "monospace" }}>{d.dlExpiry}</strong></div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--border-default)", paddingTop: 12 }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setSelectedDriver(d)}
+                        >
+                          Details
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          title="Edit Driver Profile"
+                          onClick={() => handleOpenEditDriverModal(d)}
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          title="Delete Driver Dossier"
+                          style={{ color: "var(--danger-500)" }}
+                          onClick={() => handleDeletePromptDriver(d)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px", fontSize: 12, marginBottom: 14 }}>
-                      <div>
-                        <span style={{ color: "var(--text-muted)" }}>Total Rides:</span> <strong style={{ color: "var(--text-secondary)" }}>{d.rides}</strong>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                        <span style={{ color: "var(--text-muted)" }}>Rating:</span>
-                        <Star size={12} style={{ color: "#f59e0b", fill: "#f59e0b" }} />
-                        <strong style={{ color: "var(--text-secondary)" }}>{d.rating}</strong>
-                      </div>
-                      <div style={{ gridColumn: "span 2" }}>
-                        <span style={{ color: "var(--text-muted)" }}>Verification:</span>{" "}
-                        {d.policeVerification === "completed" ? (
-                          <span style={{ color: "var(--success-600)", fontWeight: 600 }}>Verified ✓</span>
-                        ) : (
-                          <span style={{ color: "var(--warning-600)", fontWeight: 600 }}>Pending ⚠️</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, borderTop: "1px solid var(--border-default)", paddingTop: 12 }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setSelectedDriver(d)}
-                      >
-                        Details
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-icon btn-sm"
-                        title="Edit Driver Profile"
-                        onClick={() => handleOpenEditDriverModal(d)}
-                      >
-                        <Edit size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             )}
 
             <Pagination
-              page={currentDriversPage}
-              total={filteredDrivers.length}
+              page={driversPage}
+              total={driversTotal}
               perPage={perPage}
-              onChange={setDriversPage}
+              onChange={(p) => setDriversPage(p)}
             />
           </div>
         </div>
@@ -2691,14 +2729,51 @@ export function Cabs() {
                 setAddDriverOpen(false);
                 setEditDriverOpen(false);
               }}
+              disabled={driverActionLoading}
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              {editDriverOpen ? "Save Dossier" : "Add Dossier"}
+            <button type="submit" className="btn btn-primary" disabled={driverActionLoading}>
+              {driverActionLoading
+                ? "Saving Dossier..."
+                : editDriverOpen
+                ? "Save Dossier"
+                : "Add Dossier"}
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Driver Confirmation Modal */}
+      <Modal
+        open={deleteDriverModalOpen}
+        onClose={() => setDeleteDriverModalOpen(false)}
+        title="Remove Driver Dossier"
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--text-secondary)" }}>
+            Are you sure you want to remove driver <strong>{driverToDelete?.name}</strong> ({driverToDelete?.drvCode || driverToDelete?.id})?
+            This will archive the driver record and detach any assigned trips.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setDeleteDriverModalOpen(false)}
+              disabled={driverActionLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={handleConfirmDeleteDriver}
+              disabled={driverActionLoading}
+            >
+              {driverActionLoading ? "Removing..." : "Delete Driver"}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Register Vehicle Modal */}

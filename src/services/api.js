@@ -385,72 +385,11 @@ export const usersApi = {
   },
 };
 
-export const staffApi = {
-  async getAll(params = {}) {
-    const query = new URLSearchParams();
-    if (params.page) query.append('page', params.page);
-    if (params.limit) query.append('limit', params.limit);
-    if (params.search) query.append('search', params.search);
-    if (params.status && params.status !== 'all') query.append('status', params.status);
-    const queryString = query.toString() ? `?${query.toString()}` : '';
-    const res = await apiRequest(`/admin/staff${queryString}`);
-    return res?.data || res;
-  },
-  async getById(id) {
-    const res = await apiRequest(`/admin/staff/${id}`);
-    return res?.data || res;
-  },
-  async create(data) {
-    const res = await apiRequest('/admin/staff', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-    return res?.data || res;
-  },
-  async update(id, data) {
-    const res = await apiRequest(`/admin/staff/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-    return res?.data || res;
-  },
-  async delete(id) {
-    const res = await apiRequest(`/admin/staff/${id}`, {
-      method: 'DELETE',
-    });
-    return res?.data || res;
-  }
-};
-
-export const rolesApi = {
-  async getAll() {
-    const res = await apiRequest('/admin/roles');
-    return res?.data || res;
-  },
-  async updatePermissions(id, permissions) {
-    const res = await apiRequest(`/admin/roles/${id}/permissions`, {
-      method: 'PATCH',
-      body: JSON.stringify({ permissions }),
-    });
-    return res?.data || res;
-  }
-};
-
-export const auditApi = {
-  async getLogs(limit = 50) {
-    const res = await apiRequest(`/admin/audit-logs?limit=${limit}`);
-    return res?.data || res;
-  }
-};
-
 export default {
   API_BASE_URL,
   apiRequest,
   authService,
   usersApi,
-  staffApi,
-  rolesApi,
-  auditApi,
   decodeJwt,
   isTokenExpired,
 };
