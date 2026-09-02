@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Trash2, Loader2, Radio } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
-import { StatusBadge } from "../../components/ui/index.jsx";
+import { StatusBadge, ConfirmDeleteModal } from "../../components/ui/index.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import { settingsApi } from "../../services/api.js";
 
@@ -19,11 +19,14 @@ export default function ConnectedApisTab() {
 
   // Modal / Form States
   const [addApiOpen, setAddApiOpen] = useState(false);
+  const [addingApi, setAddingApi] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [apiToDelete, setApiToDelete] = useState(null);
+
   const [newApiName, setNewApiName] = useState("");
   const [newApiType, setNewApiType] = useState("Flight");
   const [newApiProvider, setNewApiProvider] = useState("");
   const [newApiTags, setNewApiTags] = useState("");
-  const [addingApi, setAddingApi] = useState(false);
 
   // Search/Filter states
   const [apisSearchTerm, setApisSearchTerm] = useState("");
@@ -92,9 +95,9 @@ export default function ConnectedApisTab() {
     }
     const parsedTags = newApiTags
       ? newApiTags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean)
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
       : [];
 
     setAddingApi(true);
@@ -119,13 +122,21 @@ export default function ConnectedApisTab() {
     }
   };
 
-  const handleDeleteApi = async (id, name) => {
+  const promptDeleteApi = (id, name) => {
+    setApiToDelete({ id, name });
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteApi = async () => {
+    if (!apiToDelete) return;
     try {
-      await settingsApi.deleteApi(id);
-      setApiConfigs((prev) => prev.filter((a) => a.id !== id && a.apiId !== id));
-      addToast(`${name} disconnected and removed from database!`, "warning");
+      await settingsApi.deleteApi(apiToDelete.id);
+      setApiConfigs((prev) => prev.filter((a) => a.id !== apiToDelete.id));
+      addToast(`${apiToDelete.name} disconnected!`, "warning");
+      setDeleteModalOpen(false);
+      setApiToDelete(null);
     } catch (err) {
-      addToast(err.message || "Failed to delete API", "error");
+      addToast(err.message || "Failed to disconnect API", "error");
     }
   };
 
@@ -262,120 +273,120 @@ export default function ConnectedApisTab() {
                 filteredApiConfigs.map((a) => (
                   <tr key={a.id}>
                     <td style={{ fontWeight: 600 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: STATUS_DOT[a.status] || "#9ca3af",
-                          display: "inline-block",
-                          flexShrink: 0,
-                        }}
-                      />
                       <div
                         style={{
                           display: "flex",
-                          flexDirection: "column",
-                          gap: 4,
+                          alignItems: "center",
+                          gap: 8,
                         }}
                       >
-                        <span>{a.name}</span>
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: STATUS_DOT[a.status] || "#9ca3af",
+                            display: "inline-block",
+                            flexShrink: 0,
+                          }}
+                        />
                         <div
-                          style={{ display: "flex", gap: 4, flexWrap: "wrap" }}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                          }}
                         >
-                          {a.tags &&
-                            a.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                style={{
-                                  fontSize: 9,
-                                  background: "rgba(16, 185, 129, 0.08)",
-                                  color: "#10b981",
-                                  padding: "1px 5px",
-                                  borderRadius: "3px",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {tag}
-                              </span>
-                            ))}
+                          <span>{a.name}</span>
+                          <div
+                            style={{ display: "flex", gap: 4, flexWrap: "wrap" }}
+                          >
+                            {a.tags &&
+                              a.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  style={{
+                                    fontSize: 9,
+                                    background: "rgba(16, 185, 129, 0.08)",
+                                    color: "#10b981",
+                                    padding: "1px 5px",
+                                    borderRadius: "3px",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        background: "var(--bg-hover)",
-                        padding: "2px 8px",
-                        borderRadius: "var(--radius-full)",
-                        fontWeight: 600,
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {a.type}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 13 }}>{a.provider}</td>
-                  <td>
-                    <StatusBadge status={a.status} />
-                  </td>
-                  <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                    {a.lastPing}
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        fontFamily: "monospace",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color:
-                          a.latency === "-"
-                            ? "var(--text-muted)"
-                            : parseInt(a.latency) > 300
-                              ? "var(--warning-600)"
-                              : "var(--success-600)",
-                      }}
-                    >
-                      {a.latency}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => testApi(a.id, a.name)}
-                        disabled={pingingId === a.id}
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          background: "var(--bg-hover)",
+                          padding: "2px 8px",
+                          borderRadius: "var(--radius-full)",
+                          fontWeight: 600,
+                          color: "var(--text-secondary)",
+                        }}
                       >
-                        {pingingId === a.id ? (
-                          <>
-                            <Loader2 size={12} className="spin" style={{ marginRight: 4 }} />
-                            Pinging...
-                          </>
-                        ) : (
-                          "Test"
-                        )}
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: "var(--danger-500)", padding: 4 }}
-                        onClick={() => handleDeleteApi(a.id, a.name)}
-                        title="Disconnect API"
+                        {a.type}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 13 }}>{a.provider}</td>
+                    <td>
+                      <StatusBadge status={a.status} />
+                    </td>
+                    <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                      {a.lastPing}
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color:
+                            a.latency === "-"
+                              ? "var(--text-muted)"
+                              : parseInt(a.latency) > 300
+                                ? "var(--warning-600)"
+                                : "var(--success-600)",
+                        }}
                       >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )))}
+                        {a.latency}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => testApi(a.id, a.name)}
+                          disabled={pingingId === a.id}
+                        >
+                          {pingingId === a.id ? (
+                            <>
+                              <Loader2 size={12} className="spin" style={{ marginRight: 4 }} />
+                              Pinging...
+                            </>
+                          ) : (
+                            "Test"
+                          )}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: "var(--danger-500)", padding: 4 }}
+                          onClick={() => promptDeleteApi(a.id, a.name)}
+                          title="Disconnect API"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )))}
             </tbody>
           </table>
         </div>
@@ -466,6 +477,16 @@ export default function ConnectedApisTab() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setApiToDelete(null);
+        }}
+        onConfirm={confirmDeleteApi}
+        itemName={apiToDelete?.name}
+      />
     </div>
   );
 }

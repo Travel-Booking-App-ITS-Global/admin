@@ -2,7 +2,51 @@ import { useState, useEffect } from "react";
 import { Eye, EyeOff, Trash2, RefreshCw, Pencil, Loader2, Copy } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { ConfirmDeleteModal } from "../../components/ui/index.jsx";
 import { settingsApi } from "../../services/api.js";
+
+const initialApiKeys = [
+  {
+    id: "KEY001",
+    name: "Razorpay Secret Key",
+    provider: "Razorpay",
+    value: "rzp_live_abcd1234efgh5678",
+    hidden: true,
+    tags: ["Payment", "Production"],
+  },
+  {
+    id: "KEY002",
+    name: "Stripe Secret Key",
+    provider: "Stripe",
+    value: "sk_live_51NvXYZabc1237890",
+    hidden: true,
+    tags: ["Payment", "Production"],
+  },
+  {
+    id: "KEY003",
+    name: "Google Maps API Key",
+    provider: "Google",
+    value: "AIzaSyA1234567890-bcdefg",
+    hidden: true,
+    tags: ["Maps", "Development"],
+  },
+  {
+    id: "KEY004",
+    name: "Firebase Server Key",
+    provider: "Firebase",
+    value: "AAAA1234567890:APA91b-xyz",
+    hidden: true,
+    tags: ["Auth", "Production"],
+  },
+  {
+    id: "KEY005",
+    name: "Amadeus API Secret",
+    provider: "Amadeus",
+    value: "amadeus_secret_9988776655",
+    hidden: true,
+    tags: ["Flights", "Development"],
+  },
+];
 
 export default function ApiKeysTab() {
   const { addToast } = useApp();
@@ -24,6 +68,9 @@ export default function ApiKeysTab() {
   const [editKeyProvider, setEditKeyProvider] = useState("");
   const [editKeyValue, setEditKeyValue] = useState("");
   const [editKeyTags, setEditKeyTags] = useState("");
+
+  const [keyToDelete, setKeyToDelete] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // Search/Filter states
   const [keysSearchTerm, setKeysSearchTerm] = useState("");
@@ -142,29 +189,23 @@ export default function ApiKeysTab() {
     }
   };
 
-  const handleDeleteKey = async (id, name) => {
+  const promptDeleteKey = (id, name) => {
+    setKeyToDelete({ id, name });
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteKey = async () => {
+    if (!keyToDelete) return;
     try {
-      await settingsApi.deleteKey(id);
-      setApiKeys((prev) => prev.filter((k) => k.id !== id && k.rawId !== id));
-      addToast(`${name} revoked and deleted from database!`, "error");
+      await settingsApi.deleteKey(keyToDelete.id);
+      setApiKeys((prev) => prev.filter((k) => k.id !== keyToDelete.id && k.rawId !== keyToDelete.id));
+      addToast(`${keyToDelete.name} revoked and deleted from database!`, "error");
+      setDeleteModalOpen(false);
+      setKeyToDelete(null);
     } catch (err) {
       addToast(err.message || "Failed to delete API key", "error");
     }
   };
-
-  const filteredApiKeys = apiKeys.filter((key) => {
-    const matchesSearch =
-      key.name.toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
-      key.provider.toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
-      (key.tags &&
-        key.tags.some((t) =>
-          t.toLowerCase().includes(keysSearchTerm.toLowerCase())
-        ));
-    const matchesFilter =
-      activeKeyFilter === "All" ||
-      (key.tags && key.tags.includes(activeKeyFilter));
-    return matchesSearch && matchesFilter;
-  });
 
   return (
     <div>
@@ -282,132 +323,132 @@ export default function ApiKeysTab() {
             filteredApiKeys.map((key) => (
               <div
                 key={key.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "14px 16px",
-                background: "var(--bg-hover)",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-default)",
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>
-                    {key.name}
-                  </span>
-                  <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 16px",
+                  background: "var(--bg-hover)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-default)",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
+                  <div
                     style={{
-                      fontSize: 10,
-                      background: "var(--brand-50)",
-                      color: "var(--brand-700)",
-                      padding: "1px 6px",
-                      borderRadius: "var(--radius-sm)",
-                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      flexWrap: "wrap",
                     }}
                   >
-                    {key.provider}
-                  </span>
-                  
-                  {/* Render Tags */}
-                  {key.tags && key.tags.map((tag) => (
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>
+                      {key.name}
+                    </span>
                     <span
-                      key={tag}
                       style={{
-                        fontSize: 9,
-                        background: "rgba(var(--brand-500-rgb, 59, 130, 246), 0.08)",
-                        color: "var(--brand-500)",
+                        fontSize: 10,
+                        background: "var(--brand-50)",
+                        color: "var(--brand-700)",
                         padding: "1px 6px",
-                        borderRadius: "4px",
-                        fontWeight: 700,
-                        border: "1px solid rgba(var(--brand-500-rgb, 59, 130, 246), 0.15)",
+                        borderRadius: "var(--radius-sm)",
+                        fontWeight: 600,
                       }}
                     >
-                      {tag}
+                      {key.provider}
                     </span>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontFamily: "monospace",
-                    color: "var(--text-muted)",
-                    marginTop: 4,
-                    wordBreak: "break-all",
-                  }}
-                >
-                  {key.hidden ? "•".repeat(24) : key.value}
-                </div>
-              </div>
 
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  style={{
-                    padding: "4px 8px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  onClick={() => toggleKeyVisibility(key.id)}
-                  title={key.hidden ? "Show API Key" : "Hide API Key"}
-                >
-                  {key.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(key.value);
-                    addToast(`${key.name} copied to clipboard!`, "success");
-                  }}
-                >
-                  Copy
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                  onClick={() => handleEditClick(key)}
-                >
-                  <Pencil size={12} />
-                  Edit
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  style={{
-                    color: "var(--warning-600)",
-                    borderColor: "var(--warning-500)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                  onClick={() => handleRotateKey(key.id, key.name)}
-                >
-                  <RefreshCw size={12} />
-                  Rotate
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ color: "var(--danger-500)", padding: 4 }}
-                  onClick={() => handleDeleteKey(key.id, key.name)}
-                  title="Delete Key"
-                >
-                  <Trash2 size={15} />
-                </button>
+                    {/* Render Tags */}
+                    {key.tags && key.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        style={{
+                          fontSize: 9,
+                          background: "rgba(var(--brand-500-rgb, 59, 130, 246), 0.08)",
+                          color: "var(--brand-500)",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          fontWeight: 700,
+                          border: "1px solid rgba(var(--brand-500-rgb, 59, 130, 246), 0.15)",
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontFamily: "monospace",
+                      color: "var(--text-muted)",
+                      marginTop: 4,
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {key.hidden ? "•".repeat(24) : key.value}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      padding: "4px 8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onClick={() => toggleKeyVisibility(key.id)}
+                    title={key.hidden ? "Show API Key" : "Hide API Key"}
+                  >
+                    {key.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(key.value);
+                      addToast(`${key.name} copied to clipboard!`, "success");
+                    }}
+                  >
+                    Copy
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                    onClick={() => handleEditClick(key)}
+                  >
+                    <Pencil size={12} />
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      color: "var(--warning-600)",
+                      borderColor: "var(--warning-500)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                    onClick={() => handleRotateKey(key.id, key.name)}
+                  >
+                    <RefreshCw size={12} />
+                    Rotate
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: "var(--danger-500)", padding: 4 }}
+                    onClick={() => promptDeleteKey(key.id, key.name)}
+                    title="Delete Key"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
-            </div>
-          )))}
+            )))}
         </div>
       </div>
 
@@ -582,6 +623,16 @@ export default function ApiKeysTab() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setKeyToDelete(null);
+        }}
+        onConfirm={confirmDeleteKey}
+        itemName={keyToDelete?.name}
+      />
     </div>
   );
 }

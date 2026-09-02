@@ -1,4 +1,7 @@
 /* Badge, StatusBadge, and KPI Card components */
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
+
+export { ConfirmDeleteModal };
 
 export function Badge({ children, variant = 'gray' }) {
   return <span className={`badge badge-${variant}`}>{children}</span>;

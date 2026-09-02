@@ -754,6 +754,44 @@ export const contactsApi = {
   },
 };
 
+export const cmsApi = {
+  async getFaqs() {
+    const res = await apiRequest('/admin/cms/faqs');
+    return res?.data || res;
+  },
+  async getPolicies() {
+    const res = await apiRequest('/admin/cms/policies');
+    return res?.data || res;
+  },
+  async createFaq(data) {
+    const res = await apiRequest('/admin/cms/faqs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async updateFaq(id, data) {
+    const res = await apiRequest(`/admin/cms/faqs/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async deleteFaq(id) {
+    const res = await apiRequest(`/admin/cms/faqs/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+  async updatePolicy(id, data) {
+    const res = await apiRequest(`/admin/cms/policies/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+};
+
 export default {
   API_BASE_URL,
   apiRequest,
@@ -766,6 +804,7 @@ export default {
   auditApi,
   settingsApi,
   contactsApi,
+  cmsApi,
   decodeJwt,
   isTokenExpired,
 };

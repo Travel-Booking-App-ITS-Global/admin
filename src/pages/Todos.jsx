@@ -14,7 +14,7 @@ import {
   ArrowRight,
   ArrowLeft,
 } from "lucide-react";
-import { PageHeader, StatusBadge, Avatar } from "../components/ui/index.jsx";
+import { PageHeader, StatusBadge, Avatar, ConfirmDeleteModal } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
 import { useApp } from "../store/AppContext.jsx";
@@ -121,6 +121,9 @@ export default function Todos() {
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
 
+  const [todoToDelete, setTodoToDelete] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create"); // 'create' or 'edit'
@@ -208,9 +211,17 @@ export default function Todos() {
   };
 
   // Delete Todo
-  const handleDeleteTodo = (id, title) => {
-    setTodos((prev) => prev.filter((t) => t.id !== id));
-    addToast(`Task "${title.substring(0, 20)}..." deleted!`, "error");
+  const promptDeleteTodo = (todo) => {
+    setTodoToDelete(todo);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteTodo = () => {
+    if (!todoToDelete) return;
+    setTodos((prev) => prev.filter((t) => t.id !== todoToDelete.id));
+    addToast(`Task "${todoToDelete.title.substring(0, 20)}..." marked as deleted!`, "error");
+    setDeleteModalOpen(false);
+    setTodoToDelete(null);
   };
 
   // Open Modal for Add
@@ -645,7 +656,7 @@ export default function Todos() {
                               title="Delete Task"
                               style={{ color: "var(--danger-500)" }}
                               onClick={() =>
-                                handleDeleteTodo(todo.id, todo.title)
+                                promptDeleteTodo(todo)
                               }
                             >
                               <Trash2 size={14} />
@@ -985,7 +996,7 @@ export default function Todos() {
                               style={{ padding: 4, color: "var(--danger-500)" }}
                               title="Delete Task"
                               onClick={() =>
-                                handleDeleteTodo(todo.id, todo.title)
+                                promptDeleteTodo(todo)
                               }
                             >
                               <Trash2 size={10} />
@@ -1156,6 +1167,16 @@ export default function Todos() {
           />
         </form>
       </Modal>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setTodoToDelete(null);
+        }}
+        onConfirm={confirmDeleteTodo}
+        itemName={todoToDelete?.title}
+      />
     </div>
   );
 }

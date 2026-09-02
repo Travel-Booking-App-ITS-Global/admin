@@ -44,33 +44,6 @@ export default function ProfileTab() {
   const [activeVaultFilter, setActiveVaultFilter] = useState("All");
   const vaultFilterTags = ["All", "Legal", "Technical", "Identity", "Finance", "General"];
 
-  // Fetch real profile from DB on mount
-  useEffect(() => {
-    let mounted = true;
-    settingsApi
-      .getProfile()
-      .then((data) => {
-        if (!mounted || !data) return;
-        if (data.name) setProfileName(data.name);
-        if (data.email) setProfileEmail(data.email);
-        if (data.avatar) setProfileAvatar(data.avatar);
-        if (data.role) setProfileRole(data.role);
-        if (data.phone) setProfilePhone(data.phone);
-        if (data.location) setProfileLocation(data.location);
-        if (data.bio) setProfileBio(data.bio);
-        if (Array.isArray(data.vaultDocs)) setVaultDocs(data.vaultDocs);
-      })
-      .catch((err) => {
-        console.warn("Could not load backend profile:", err);
-      })
-      .finally(() => {
-        if (mounted) setProfileLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
@@ -136,23 +109,14 @@ export default function ProfileTab() {
     }
   };
 
-  const handleDeleteDoc = async (id, name) => {
-    try {
-      const res = await settingsApi.deleteVaultDoc(id);
-      if (res?.documents) {
-        setVaultDocs(res.documents);
-      } else {
-        setVaultDocs((prev) => prev.filter((d) => d.id !== id));
-      }
-      addToast(`${name} removed from Vault.`, "warning");
-    } catch (err) {
-      addToast(err.message || "Failed to delete document", "error");
-    }
+  const handleDeleteDoc = (id, name) => {
+    setVaultDocs(vaultDocs.filter((d) => d.id !== id));
+    addToast(`${name} removed from Vault.`, "warning");
   };
 
   const filteredVaultDocs = vaultDocs.filter((doc) => {
-    const matchesSearch = doc.name.toLowerCase().includes(vaultSearchTerm.toLowerCase()) || 
-                          (doc.tags && doc.tags.some(t => t.toLowerCase().includes(vaultSearchTerm.toLowerCase())));
+    const matchesSearch = doc.name.toLowerCase().includes(vaultSearchTerm.toLowerCase()) ||
+      (doc.tags && doc.tags.some(t => t.toLowerCase().includes(vaultSearchTerm.toLowerCase())));
     const matchesFilter = activeVaultFilter === "All" || (doc.tags && doc.tags.includes(activeVaultFilter));
     return matchesSearch && matchesFilter;
   });
@@ -256,11 +220,11 @@ export default function ProfileTab() {
                   >
                     {profileName
                       ? profileName
-                          .split(" ")
-                          .map((x) => x[0])
-                          .slice(0, 2)
-                          .join("")
-                          .toUpperCase()
+                        .split(" ")
+                        .map((x) => x[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase()
                       : "SA"}
                   </div>
                 )}
@@ -605,15 +569,15 @@ export default function ProfileTab() {
                 cursor: "pointer",
               }}
             />
-            
+
             {/* Inline Tag selector before uploading */}
-            <div 
-              style={{ 
-                position: "relative", 
-                zIndex: 10, 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
+            <div
+              style={{
+                position: "relative",
+                zIndex: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 gap: 8,
                 background: "var(--bg-card)",
                 padding: "6px 12px",
@@ -808,7 +772,7 @@ export default function ProfileTab() {
                         <span>•</span>
                         <span>Uploaded {doc.date}</span>
                       </div>
-                      
+
                       {/* Document tags display */}
                       <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
                         {doc.tags && doc.tags.map((tag) => (
@@ -817,15 +781,15 @@ export default function ProfileTab() {
                             style={{
                               fontSize: 9,
                               background: tag === "Legal" ? "rgba(239, 68, 68, 0.1)" :
-                                          tag === "Technical" ? "rgba(59, 130, 246, 0.1)" :
-                                          tag === "Identity" ? "rgba(16, 185, 129, 0.1)" :
-                                          tag === "Finance" ? "rgba(245, 158, 11, 0.1)" :
-                                          "rgba(156, 163, 175, 0.1)",
+                                tag === "Technical" ? "rgba(59, 130, 246, 0.1)" :
+                                  tag === "Identity" ? "rgba(16, 185, 129, 0.1)" :
+                                    tag === "Finance" ? "rgba(245, 158, 11, 0.1)" :
+                                      "rgba(156, 163, 175, 0.1)",
                               color: tag === "Legal" ? "var(--danger-500)" :
-                                     tag === "Technical" ? "var(--brand-600)" :
-                                     tag === "Identity" ? "#10b981" :
-                                     tag === "Finance" ? "#f59e0b" :
-                                     "var(--text-muted)",
+                                tag === "Technical" ? "var(--brand-600)" :
+                                  tag === "Identity" ? "#10b981" :
+                                    tag === "Finance" ? "#f59e0b" :
+                                      "var(--text-muted)",
                               padding: "1px 6px",
                               borderRadius: "4px",
                               fontWeight: 700,
@@ -862,7 +826,7 @@ export default function ProfileTab() {
                       className="btn btn-ghost btn-sm"
                       style={{ padding: 6 }}
                       title="Delete"
-                      onClick={() => handleDeleteDoc(doc.id, doc.name)}
+                      onClick={() => promptDeleteDoc(doc.id, doc.name)}
                     >
                       <Trash2 size={14} color="var(--danger-500)" />
                     </button>
@@ -873,6 +837,16 @@ export default function ProfileTab() {
           </div>
         </div>
       </div>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setDocToDelete(null);
+        }}
+        onConfirm={confirmDeleteDoc}
+        itemName={docToDelete?.name}
+      />
     </div>
   );
 }
