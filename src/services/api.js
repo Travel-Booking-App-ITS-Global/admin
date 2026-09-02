@@ -385,11 +385,148 @@ export const usersApi = {
   },
 };
 
+/**
+ * Enterprise Admin Drivers Management Service
+ */
+export const driversApi = {
+  /**
+   * Get list of drivers with search, status filter, and pagination
+   */
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.sortBy) query.append('sortBy', params.sortBy);
+    if (params.sortOrder) query.append('sortOrder', params.sortOrder);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest(`/admin/drivers${queryString}`);
+    return res?.data || res;
+  },
+
+  /**
+   * Get complete driver profile
+   */
+  async getById(id) {
+    const res = await apiRequest(`/admin/drivers/${id}`);
+    return res?.data || res;
+  },
+
+  /**
+   * Create a new driver
+   */
+  async create(driverData) {
+    const res = await apiRequest('/admin/drivers', {
+      method: 'POST',
+      body: JSON.stringify(driverData),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Update existing driver details
+   */
+  async update(id, driverData) {
+    const res = await apiRequest(`/admin/drivers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(driverData),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Toggle driver active/blocked status
+   */
+  async toggleStatus(id, status) {
+    const res = await apiRequest(`/admin/drivers/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Delete driver account (soft delete)
+   */
+  async delete(id) {
+    const res = await apiRequest(`/admin/drivers/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+/**
+ * Enterprise Admin Staff Management Service
+ */
+export const staffApi = {
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest(`/admin/staff${queryString}`);
+    return res?.data || res;
+  },
+
+  async create(staffData) {
+    const res = await apiRequest('/admin/staff', {
+      method: 'POST',
+      body: JSON.stringify(staffData),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, staffData) {
+    const res = await apiRequest(`/admin/staff/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(staffData),
+    });
+    return res?.data || res;
+  }
+};
+
+/**
+ * Enterprise Admin Roles Service
+ */
+export const rolesApi = {
+  async getAll() {
+    const res = await apiRequest('/admin/roles');
+    return res?.data || res;
+  },
+
+  async updatePermissions(id, permissions) {
+    const res = await apiRequest(`/admin/roles/${id}/permissions`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissions }),
+    });
+    return res?.data || res;
+  }
+};
+
+/**
+ * Enterprise Admin Audit Logs Service
+ */
+export const auditApi = {
+  async getLogs(limit = 50) {
+    const res = await apiRequest(`/admin/audit/logs?limit=${limit}`);
+    return res?.data || res;
+  }
+};
+
 export default {
   API_BASE_URL,
   apiRequest,
   authService,
   usersApi,
+  driversApi,
+  staffApi,
+  rolesApi,
+  auditApi,
   decodeJwt,
   isTokenExpired,
 };
