@@ -794,10 +794,16 @@ export function Cabs() {
   }, [driversPage, driverSearch, perPage]);
 
   useEffect(() => {
+    if (tab === "drivers" && drivers.length === 0) {
+      loadDrivers(driversPage, driverSearch);
+    }
+  }, [tab]);
+
+  useEffect(() => {
     if (tab === "drivers") {
       loadDrivers(driversPage, driverSearch);
     }
-  }, [tab, driversPage, driverSearch, loadDrivers]);
+  }, [driversPage, driverSearch]);
 
   // Dynamic compliance vehicles database from backend API
   const [vehicles, setVehicles] = useState([]);
@@ -832,10 +838,16 @@ export function Cabs() {
   }, [vehiclesPage, vehicleSearch, perPage]);
 
   useEffect(() => {
+    if (tab === "vehicles" && vehicles.length === 0) {
+      loadVehicles(vehiclesPage, vehicleSearch);
+    }
+  }, [tab]);
+
+  useEffect(() => {
     if (tab === "vehicles") {
       loadVehicles(vehiclesPage, vehicleSearch);
     }
-  }, [tab, vehiclesPage, vehicleSearch, loadVehicles]);
+  }, [vehiclesPage, vehicleSearch]);
 
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [selectedVehicle, setSelectedVehicle] = useState(null);

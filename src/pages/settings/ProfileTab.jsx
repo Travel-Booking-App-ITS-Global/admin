@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Camera,
   User,
@@ -12,50 +12,31 @@ import {
   FileText,
   Download,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
+import { settingsApi } from "../../services/api.js";
 
 export default function ProfileTab() {
   const { adminName, adminEmail, adminAvatar, updateAdminProfile, addToast } =
     useApp();
 
   // Basic Profile State
-  const [profileName, setProfileName] = useState(adminName);
-  const [profileEmail, setProfileEmail] = useState(adminEmail);
-  const [profileAvatar, setProfileAvatar] = useState(adminAvatar);
+  const [profileName, setProfileName] = useState(adminName || "");
+  const [profileEmail, setProfileEmail] = useState(adminEmail || "");
+  const [profileAvatar, setProfileAvatar] = useState(adminAvatar || "");
 
-  // Extended Profile State (Mocked for Super Admin Details)
-  const [profileRole, setProfileRole] = useState("Super Administrator");
-  const [profilePhone, setProfilePhone] = useState("+1 (555) 123-4567");
-  const [profileLocation, setProfileLocation] = useState("San Francisco, CA");
-  const [profileBio, setProfileBio] = useState(
-    "Leading the tech infrastructure and global operations for the platform.",
-  );
+  // Extended Profile State
+  const [profileRole, setProfileRole] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileLocation, setProfileLocation] = useState("");
+  const [profileBio, setProfileBio] = useState("");
 
   // Vault / Document Locker State
-  const [vaultDocs, setVaultDocs] = useState([
-    {
-      id: "doc_1",
-      name: "SuperAdmin_NDA_Signed.pdf",
-      size: "2.4 MB",
-      date: "Oct 12, 2025",
-      tags: ["Legal", "Signed"],
-    },
-    {
-      id: "doc_2",
-      name: "Project_Architecture_V2.docx",
-      size: "1.1 MB",
-      date: "Nov 05, 2025",
-      tags: ["Technical", "Design"],
-    },
-    {
-      id: "doc_3",
-      name: "Personal_ID_Copy.png",
-      size: "845 KB",
-      date: "Jan 18, 2026",
-      tags: ["Identity", "Personal"],
-    },
-  ]);
+  const [vaultDocs, setVaultDocs] = useState([]);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   // Upload/Search/Filter states for tags
   const [selectedUploadTag, setSelectedUploadTag] = useState("General");
@@ -63,6 +44,33 @@ export default function ProfileTab() {
   const [activeVaultFilter, setActiveVaultFilter] = useState("All");
   const vaultFilterTags = ["All", "Legal", "Technical", "Identity", "Finance", "General"];
 
+  // Fetch real profile from DB on mount
+  useEffect(() => {
+    let mounted = true;
+    settingsApi
+      .getProfile()
+      .then((data) => {
+        if (!mounted || !data) return;
+        if (data.name) setProfileName(data.name);
+        if (data.email) setProfileEmail(data.email);
+        if (data.avatar) setProfileAvatar(data.avatar);
+        if (data.role) setProfileRole(data.role);
+        if (data.phone) setProfilePhone(data.phone);
+        if (data.location) setProfileLocation(data.location);
+        if (data.bio) setProfileBio(data.bio);
+        if (Array.isArray(data.vaultDocs)) setVaultDocs(data.vaultDocs);
+      })
+      .catch((err) => {
+        console.warn("Could not load backend profile:", err);
+      })
+      .finally(() => {
+        if (mounted) setProfileLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
@@ -74,38 +82,72 @@ export default function ProfileTab() {
     const reader = new FileReader();
     reader.onloadend = () => {
       setProfileAvatar(reader.result);
-      addToast("Avatar loaded. Save profile to apply changes.", "info");
+      addToast("Avatar loaded. Save profile to apply changes to database.", "info");
     };
     reader.readAsDataURL(file);
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     if (!profileName.trim() || !profileEmail.trim()) {
       addToast("Name and Email are required", "error");
       return;
     }
-    updateAdminProfile(profileName, profileEmail, profileAvatar);
-    addToast("Profile details updated successfully!", "success");
+    setProfileSaving(true);
+    try {
+      const res = await settingsApi.updateProfile({
+        name: profileName.trim(),
+        email: profileEmail.trim(),
+        avatarUrl: profileAvatar,
+        phone: profilePhone.trim(),
+        location: profileLocation.trim(),
+        bio: profileBio.trim(),
+        designation: profileRole.trim(),
+      });
+      updateAdminProfile(profileName, profileEmail, profileAvatar);
+      addToast("Profile details securely saved in database!", "success");
+    } catch (err) {
+      addToast(err.message || "Failed to update profile", "error");
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const newDoc = {
-      id: `doc_${Date.now()}`,
-      name: file.name,
-      size: (file.size / 1024 / 1024).toFixed(1) + " MB",
-      date: "Just now",
-      tags: [selectedUploadTag],
-    };
-    setVaultDocs([newDoc, ...vaultDocs]);
-    addToast(`${file.name} securely added to Vault with tag [${selectedUploadTag}].`, "success");
+    setUploadingDoc(true);
+    try {
+      const res = await settingsApi.addVaultDoc({
+        name: file.name,
+        size: (file.size / 1024 / 1024).toFixed(1) + " MB",
+        tags: [selectedUploadTag],
+      });
+      if (res?.documents) {
+        setVaultDocs(res.documents);
+      } else if (res?.document) {
+        setVaultDocs((prev) => [res.document, ...prev]);
+      }
+      addToast(`${file.name} securely added to Vault with tag [${selectedUploadTag}].`, "success");
+    } catch (err) {
+      addToast(err.message || "Failed to save document into vault", "error");
+    } finally {
+      setUploadingDoc(false);
+    }
   };
 
-  const handleDeleteDoc = (id, name) => {
-    setVaultDocs(vaultDocs.filter((d) => d.id !== id));
-    addToast(`${name} removed from Vault.`, "warning");
+  const handleDeleteDoc = async (id, name) => {
+    try {
+      const res = await settingsApi.deleteVaultDoc(id);
+      if (res?.documents) {
+        setVaultDocs(res.documents);
+      } else {
+        setVaultDocs((prev) => prev.filter((d) => d.id !== id));
+      }
+      addToast(`${name} removed from Vault.`, "warning");
+    } catch (err) {
+      addToast(err.message || "Failed to delete document", "error");
+    }
   };
 
   const filteredVaultDocs = vaultDocs.filter((doc) => {
@@ -114,6 +156,14 @@ export default function ProfileTab() {
     const matchesFilter = activeVaultFilter === "All" || (doc.tags && doc.tags.includes(activeVaultFilter));
     return matchesSearch && matchesFilter;
   });
+
+  if (profileLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300 }}>
+        <Loader2 size={32} className="spin" style={{ color: "var(--brand-500)" }} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -146,7 +196,7 @@ export default function ProfileTab() {
             }}
           >
             <User size={18} color="var(--brand-500)" />
-            Super Admin Profile
+            {profileRole || "Administrator"} Profile
           </div>
           <div
             style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}
@@ -461,8 +511,16 @@ export default function ProfileTab() {
               type="submit"
               className="btn btn-primary"
               style={{ alignSelf: "flex-end", padding: "10px 24px" }}
+              disabled={profileSaving}
             >
-              Save Profile Changes
+              {profileSaving ? (
+                <>
+                  <Loader2 size={16} className="spin" style={{ marginRight: 8 }} />
+                  Saving to Database...
+                </>
+              ) : (
+                "Save Profile Changes"
+              )}
             </button>
           </form>
         </div>

@@ -1,54 +1,14 @@
-import { useState } from "react";
-import { Eye, EyeOff, Trash2, RefreshCw, Pencil } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Eye, EyeOff, Trash2, RefreshCw, Pencil, Loader2, Copy } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
 import Modal from "../../components/ui/Modal.jsx";
-
-const initialApiKeys = [
-  {
-    id: "KEY001",
-    name: "Razorpay Secret Key",
-    provider: "Razorpay",
-    value: "rzp_live_abcd1234efgh5678",
-    hidden: true,
-    tags: ["Payment", "Production"],
-  },
-  {
-    id: "KEY002",
-    name: "Stripe Secret Key",
-    provider: "Stripe",
-    value: "sk_live_51NvXYZabc1237890",
-    hidden: true,
-    tags: ["Payment", "Production"],
-  },
-  {
-    id: "KEY003",
-    name: "Google Maps API Key",
-    provider: "Google",
-    value: "AIzaSyA1234567890-bcdefg",
-    hidden: true,
-    tags: ["Maps", "Development"],
-  },
-  {
-    id: "KEY004",
-    name: "Firebase Server Key",
-    provider: "Firebase",
-    value: "AAAA1234567890:APA91b-xyz",
-    hidden: true,
-    tags: ["Auth", "Production"],
-  },
-  {
-    id: "KEY005",
-    name: "Amadeus API Secret",
-    provider: "Amadeus",
-    value: "amadeus_secret_9988776655",
-    hidden: true,
-    tags: ["Flights", "Development"],
-  },
-];
+import { settingsApi } from "../../services/api.js";
 
 export default function ApiKeysTab() {
   const { addToast } = useApp();
-  const [apiKeys, setApiKeys] = useState(initialApiKeys);
+  const [apiKeys, setApiKeys] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Add Modal States
   const [addKeyOpen, setAddKeyOpen] = useState(false);
@@ -70,8 +30,32 @@ export default function ApiKeysTab() {
   const [activeKeyFilter, setActiveKeyFilter] = useState("All");
   const keysFilterTags = ["All", "Payment", "Maps", "Auth", "Flights", "Production", "Development"];
 
+  const loadKeys = async () => {
+    try {
+      const data = await settingsApi.getKeys();
+      if (Array.isArray(data)) {
+        setApiKeys(
+          data.map((k) => ({
+            ...k,
+            id: k.keyCode || k.id,
+            rawId: k.id,
+            value: k.keySecret || k.value || "",
+            hidden: true,
+          }))
+        );
+      }
+    } catch (err) {
+      console.warn("Failed to load API keys:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleAddKey = (e) => {
+  useEffect(() => {
+    loadKeys();
+  }, []);
+
+  const handleAddKey = async (e) => {
     e.preventDefault();
     if (!newKeyName.trim() || !newKeyValue.trim()) {
       addToast("Please fill out Key Name and Key Value", "error");
@@ -80,24 +64,31 @@ export default function ApiKeysTab() {
     const parsedTags = newKeyTags
       ? newKeyTags.split(",").map((t) => t.trim()).filter(Boolean)
       : [];
-    const added = {
-      id: `KEY${Date.now()}`,
-      name: newKeyName,
-      provider: newKeyProvider,
-      value: newKeyValue,
-      hidden: true,
-      tags: parsedTags,
-    };
-    setApiKeys((prev) => [...prev, added]);
-    addToast(`${newKeyName} added successfully!`, "success");
-    setNewKeyName("");
-    setNewKeyValue("");
-    setNewKeyTags("");
-    setAddKeyOpen(false);
+
+    setActionLoading(true);
+    try {
+      await settingsApi.createKey({
+        name: newKeyName.trim(),
+        provider: newKeyProvider.trim(),
+        value: newKeyValue.trim(),
+        tags: parsedTags,
+        status: "active",
+      });
+      addToast(`${newKeyName} added and secured in database!`, "success");
+      setNewKeyName("");
+      setNewKeyValue("");
+      setNewKeyTags("");
+      setAddKeyOpen(false);
+      await loadKeys();
+    } catch (err) {
+      addToast(err.message || "Failed to create API key", "error");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleEditClick = (key) => {
-    setEditingKeyId(key.id);
+    setEditingKeyId(key.rawId || key.id);
     setEditKeyName(key.name);
     setEditKeyProvider(key.provider);
     setEditKeyValue(key.value);
@@ -105,7 +96,7 @@ export default function ApiKeysTab() {
     setEditKeyOpen(true);
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editKeyName.trim() || !editKeyValue.trim()) {
       addToast("Please fill out Key Name and Key Value", "error");
@@ -114,33 +105,26 @@ export default function ApiKeysTab() {
     const parsedTags = editKeyTags
       ? editKeyTags.split(",").map((t) => t.trim()).filter(Boolean)
       : [];
-    setApiKeys((prev) =>
-      prev.map((k) =>
-        k.id === editingKeyId
-          ? {
-              ...k,
-              name: editKeyName,
-              provider: editKeyProvider,
-              value: editKeyValue,
-              tags: parsedTags,
-            }
-          : k
-      )
-    );
-    addToast(`${editKeyName} updated successfully!`, "success");
-    setEditKeyOpen(false);
-    setEditingKeyId(null);
-    setEditKeyTags("");
+
+    setActionLoading(true);
+    try {
+      await settingsApi.updateKey(editingKeyId, {
+        name: editKeyName.trim(),
+        provider: editKeyProvider.trim(),
+        value: editKeyValue.trim(),
+        tags: parsedTags,
+      });
+      addToast(`${editKeyName} updated successfully in database!`, "success");
+      setEditKeyOpen(false);
+      setEditingKeyId(null);
+      setEditKeyTags("");
+      await loadKeys();
+    } catch (err) {
+      addToast(err.message || "Failed to update API key", "error");
+    } finally {
+      setActionLoading(false);
+    }
   };
-
-  const filteredApiKeys = apiKeys.filter((key) => {
-    const matchesSearch = key.name.toLowerCase().includes(keysSearchTerm.toLowerCase()) || 
-                          key.provider.toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
-                          (key.tags && key.tags.some(t => t.toLowerCase().includes(keysSearchTerm.toLowerCase())));
-    const matchesFilter = activeKeyFilter === "All" || (key.tags && key.tags.includes(activeKeyFilter));
-    return matchesSearch && matchesFilter;
-  });
-
 
   const toggleKeyVisibility = (id) => {
     setApiKeys((prev) =>
@@ -148,32 +132,39 @@ export default function ApiKeysTab() {
     );
   };
 
-  const handleRotateKey = (id, name) => {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let newGeneratedVal = "";
-    if (name.toLowerCase().includes("stripe")) {
-      newGeneratedVal = "sk_live_";
-    } else if (name.toLowerCase().includes("razorpay")) {
-      newGeneratedVal = "rzp_live_";
-    } else if (name.toLowerCase().includes("google")) {
-      newGeneratedVal = "AIzaSy";
-    } else {
-      newGeneratedVal = "key_";
+  const handleRotateKey = async (id, name) => {
+    try {
+      const res = await settingsApi.regenerateKey(id);
+      addToast(`${name} regenerated securely with fresh cryptographic secret!`, "success");
+      await loadKeys();
+    } catch (err) {
+      addToast(err.message || "Failed to rotate API key", "error");
     }
-    for (let i = 0; i < 20; i++) {
-      newGeneratedVal += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setApiKeys((prev) =>
-      prev.map((k) => (k.id === id ? { ...k, value: newGeneratedVal } : k))
-    );
-    addToast(`${name} rotated successfully!`, "success");
   };
 
-  const handleDeleteKey = (id, name) => {
-    setApiKeys((prev) => prev.filter((k) => k.id !== id));
-    addToast(`${name} deleted!`, "error");
+  const handleDeleteKey = async (id, name) => {
+    try {
+      await settingsApi.deleteKey(id);
+      setApiKeys((prev) => prev.filter((k) => k.id !== id && k.rawId !== id));
+      addToast(`${name} revoked and deleted from database!`, "error");
+    } catch (err) {
+      addToast(err.message || "Failed to delete API key", "error");
+    }
   };
+
+  const filteredApiKeys = apiKeys.filter((key) => {
+    const matchesSearch =
+      key.name.toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
+      key.provider.toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
+      (key.tags &&
+        key.tags.some((t) =>
+          t.toLowerCase().includes(keysSearchTerm.toLowerCase())
+        ));
+    const matchesFilter =
+      activeKeyFilter === "All" ||
+      (key.tags && key.tags.includes(activeKeyFilter));
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <div>
@@ -278,9 +269,19 @@ export default function ApiKeysTab() {
             {activeKeyFilter !== "All" && <span>Filtered by: {activeKeyFilter}</span>}
           </div>
 
-          {filteredApiKeys.map((key) => (
-            <div
-              key={key.id}
+          {loading ? (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, padding: 50, color: "var(--text-muted)" }}>
+              <Loader2 size={24} className="spin" style={{ color: "var(--brand-500)" }} />
+              <span>Loading API keys from secure database...</span>
+            </div>
+          ) : filteredApiKeys.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 50, color: "var(--text-muted)", fontSize: 13 }}>
+              No API keys found in credentials vault.
+            </div>
+          ) : (
+            filteredApiKeys.map((key) => (
+              <div
+                key={key.id}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -406,22 +407,7 @@ export default function ApiKeysTab() {
                 </button>
               </div>
             </div>
-          ))}
-          {filteredApiKeys.length === 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "24px 0",
-                color: "var(--text-muted)",
-                fontSize: 13,
-                border: "1px dashed var(--border-default)",
-                borderRadius: "var(--radius-md)",
-                background: "var(--bg-hover)",
-              }}
-            >
-              No API Keys found matching the search/filter criteria.
-            </div>
-          )}
+          )))}
         </div>
       </div>
 
@@ -504,8 +490,8 @@ export default function ApiKeysTab() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Save API Key
+            <button type="submit" className="btn btn-primary" disabled={actionLoading}>
+              {actionLoading ? "Saving Key..." : "Save API Key"}
             </button>
           </div>
         </form>
@@ -590,8 +576,8 @@ export default function ApiKeysTab() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Update API Key
+            <button type="submit" className="btn btn-primary" disabled={actionLoading}>
+              {actionLoading ? "Updating Key..." : "Update API Key"}
             </button>
           </div>
         </form>

@@ -586,6 +586,174 @@ export const vehiclesApi = {
   },
 };
 
+export const settingsApi = {
+  // Profile & Vault
+  async getProfile() {
+    const res = await apiRequest('/admin/settings/profile');
+    return res?.data || res;
+  },
+  async updateProfile(data) {
+    const res = await apiRequest('/admin/settings/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async addVaultDoc(data) {
+    const res = await apiRequest('/admin/settings/profile/vault', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async deleteVaultDoc(docId) {
+    const res = await apiRequest(`/admin/settings/profile/vault/${docId}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  // Security & 2FA
+  async changePassword(currentPassword, newPassword) {
+    const res = await apiRequest('/admin/settings/security/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    return res?.data || res;
+  },
+  async toggle2FA(enabled) {
+    const res = await apiRequest('/admin/settings/security/toggle-2fa', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    });
+    return res?.data || res;
+  },
+
+  // Connected APIs
+  async getApis() {
+    const res = await apiRequest('/admin/settings/apis');
+    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+  },
+  async createApi(data) {
+    const res = await apiRequest('/admin/settings/apis', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async updateApi(id, data) {
+    const res = await apiRequest(`/admin/settings/apis/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async deleteApi(id) {
+    const res = await apiRequest(`/admin/settings/apis/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+  async pingApi(id) {
+    const res = await apiRequest(`/admin/settings/apis/${id}/ping`, {
+      method: 'POST',
+    });
+    return res?.data || res;
+  },
+
+  // API Keys
+  async getKeys() {
+    const res = await apiRequest('/admin/settings/keys');
+    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+  },
+  async createKey(data) {
+    const res = await apiRequest('/admin/settings/keys', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async updateKey(id, data) {
+    const res = await apiRequest(`/admin/settings/keys/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async deleteKey(id) {
+    const res = await apiRequest(`/admin/settings/keys/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+  async regenerateKey(id) {
+    const res = await apiRequest(`/admin/settings/keys/${id}/regenerate`, {
+      method: 'POST',
+    });
+    return res?.data || res;
+  },
+
+  // System Settings
+  async getSystemSettings(group) {
+    const query = group ? `?group=${group}` : '';
+    const res = await apiRequest(`/admin/settings/system${query}`);
+    return res?.data || res;
+  },
+  async updateSystemSetting(data) {
+    const res = await apiRequest('/admin/settings/system', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async bulkUpdateSystemSettings(settings) {
+    const res = await apiRequest('/admin/settings/system/bulk', {
+      method: 'PATCH',
+      body: JSON.stringify({ settings }),
+    });
+    return res?.data || res;
+  },
+};
+
+export const contactsApi = {
+  async getAll(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.type && params.type !== 'All') q.append('type', params.type);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/contacts${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/contacts/${id}`);
+    return res?.data || res;
+  },
+
+  async create(data) {
+    const res = await apiRequest('/admin/contacts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, data) {
+    const res = await apiRequest(`/admin/contacts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/contacts/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
 export default {
   API_BASE_URL,
   apiRequest,
@@ -596,8 +764,11 @@ export default {
   staffApi,
   rolesApi,
   auditApi,
+  settingsApi,
+  contactsApi,
   decodeJwt,
   isTokenExpired,
 };
+
 
 

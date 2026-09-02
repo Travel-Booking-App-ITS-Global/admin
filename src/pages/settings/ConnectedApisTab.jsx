@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Trash2, Loader2, Radio } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
 import { StatusBadge } from "../../components/ui/index.jsx";
 import Modal from "../../components/ui/Modal.jsx";
-import { mockAPIConfigs } from "../../data/mockData.js";
+import { settingsApi } from "../../services/api.js";
 
 const STATUS_DOT = {
   active: "#22c55e",
@@ -13,7 +13,9 @@ const STATUS_DOT = {
 
 export default function ConnectedApisTab() {
   const { addToast } = useApp();
-  const [apiConfigs, setApiConfigs] = useState(mockAPIConfigs);
+  const [apiConfigs, setApiConfigs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pingingId, setPingingId] = useState(null);
 
   // Modal / Form States
   const [addApiOpen, setAddApiOpen] = useState(false);
@@ -21,6 +23,7 @@ export default function ConnectedApisTab() {
   const [newApiType, setNewApiType] = useState("Flight");
   const [newApiProvider, setNewApiProvider] = useState("");
   const [newApiTags, setNewApiTags] = useState("");
+  const [addingApi, setAddingApi] = useState(false);
 
   // Search/Filter states
   const [apisSearchTerm, setApisSearchTerm] = useState("");
@@ -36,20 +39,52 @@ export default function ConnectedApisTab() {
     "Navigation",
   ];
 
-  const testApi = (id, name) => {
-    addToast(`Pinging ${name}…`, "info");
-    setTimeout(() => {
-      const latency = Math.floor(Math.random() * 200) + 40;
-      setApiConfigs((prev) =>
-        prev.map((a) =>
-          a.id === id ? { ...a, latency: `${latency}ms`, status: "active" } : a,
-        ),
-      );
-      addToast(`${name} responded in ${latency}ms!`, "success");
-    }, 900);
+  const loadApis = async () => {
+    try {
+      const data = await settingsApi.getApis();
+      if (Array.isArray(data)) {
+        setApiConfigs(
+          data.map((a) => ({
+            ...a,
+            type: a.category || a.type || "Flight",
+            latency: a.latencyMs ? `${a.latencyMs}ms` : "65ms",
+            lastPing: "Active",
+          }))
+        );
+      }
+    } catch (err) {
+      console.warn("Failed to load APIs:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddApi = (e) => {
+  useEffect(() => {
+    loadApis();
+  }, []);
+
+  const testApi = async (id, name) => {
+    setPingingId(id);
+    addToast(`Pinging ${name} gateway…`, "info");
+    try {
+      const res = await settingsApi.pingApi(id);
+      const latencyStr = res.latency || `${res.latencyMs || 50}ms`;
+      setApiConfigs((prev) =>
+        prev.map((a) =>
+          a.id === id || a.apiId === id
+            ? { ...a, latency: latencyStr, status: "active", lastPing: "Just now" }
+            : a
+        )
+      );
+      addToast(`${name} responded in ${latencyStr}!`, "success");
+    } catch (err) {
+      addToast(err.message || `Failed to ping ${name}`, "error");
+    } finally {
+      setPingingId(null);
+    }
+  };
+
+  const handleAddApi = async (e) => {
     e.preventDefault();
     if (!newApiName.trim() || !newApiProvider.trim()) {
       addToast("Please fill out API Name and Provider", "error");
@@ -61,37 +96,48 @@ export default function ConnectedApisTab() {
           .map((t) => t.trim())
           .filter(Boolean)
       : [];
-    const added = {
-      id: `API${Date.now()}`,
-      name: newApiName,
-      type: newApiType,
-      provider: newApiProvider,
-      status: "active",
-      lastPing: "Just now",
-      latency: "45ms",
-      tags: parsedTags,
-    };
-    setApiConfigs((prev) => [...prev, added]);
-    addToast(`${newApiName} connected successfully!`, "success");
-    setNewApiName("");
-    setNewApiProvider("");
-    setNewApiTags("");
-    setAddApiOpen(false);
+
+    setAddingApi(true);
+    try {
+      const res = await settingsApi.createApi({
+        name: newApiName.trim(),
+        provider: newApiProvider.trim(),
+        category: newApiType,
+        tags: parsedTags,
+        status: "active",
+      });
+      addToast(`${newApiName} connected successfully in database!`, "success");
+      setNewApiName("");
+      setNewApiProvider("");
+      setNewApiTags("");
+      setAddApiOpen(false);
+      await loadApis();
+    } catch (err) {
+      addToast(err.message || "Failed to add API", "error");
+    } finally {
+      setAddingApi(false);
+    }
   };
 
-  const handleDeleteApi = (id, name) => {
-    setApiConfigs((prev) => prev.filter((a) => a.id !== id));
-    addToast(`${name} disconnected!`, "warning");
+  const handleDeleteApi = async (id, name) => {
+    try {
+      await settingsApi.deleteApi(id);
+      setApiConfigs((prev) => prev.filter((a) => a.id !== id && a.apiId !== id));
+      addToast(`${name} disconnected and removed from database!`, "warning");
+    } catch (err) {
+      addToast(err.message || "Failed to delete API", "error");
+    }
   };
 
   const filteredApiConfigs = apiConfigs.filter((api) => {
+    const typeStr = api.type || api.category || "";
     const matchesSearch =
       api.name.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
       api.provider.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
-      api.type.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
+      typeStr.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
       (api.tags &&
         api.tags.some((t) =>
-          t.toLowerCase().includes(apisSearchTerm.toLowerCase()),
+          t.toLowerCase().includes(apisSearchTerm.toLowerCase())
         ));
     const matchesFilter =
       activeApiFilter === "All" ||
@@ -197,9 +243,25 @@ export default function ConnectedApisTab() {
               </tr>
             </thead>
             <tbody>
-              {filteredApiConfigs.map((a) => (
-                <tr key={a.id}>
-                  <td style={{ fontWeight: 600 }}>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "40px 0" }}>
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, color: "var(--text-muted)" }}>
+                      <Loader2 size={20} className="spin" style={{ color: "var(--brand-500)" }} />
+                      <span>Loading connected integrations from database...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredApiConfigs.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                    No connected APIs found in registry.
+                  </td>
+                </tr>
+              ) : (
+                filteredApiConfigs.map((a) => (
+                  <tr key={a.id}>
+                    <td style={{ fontWeight: 600 }}>
                     <div
                       style={{
                         display: "flex",
@@ -291,8 +353,16 @@ export default function ConnectedApisTab() {
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => testApi(a.id, a.name)}
+                        disabled={pingingId === a.id}
                       >
-                        Test
+                        {pingingId === a.id ? (
+                          <>
+                            <Loader2 size={12} className="spin" style={{ marginRight: 4 }} />
+                            Pinging...
+                          </>
+                        ) : (
+                          "Test"
+                        )}
                       </button>
                       <button
                         className="btn btn-ghost btn-sm"
@@ -305,22 +375,7 @@ export default function ConnectedApisTab() {
                     </div>
                   </td>
                 </tr>
-              ))}
-              {filteredApiConfigs.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    style={{
-                      textAlign: "center",
-                      padding: "30px 0",
-                      color: "var(--text-muted)",
-                      fontSize: 13,
-                    }}
-                  >
-                    No APIs found matching the search/filter criteria.
-                  </td>
-                </tr>
-              )}
+              )))}
             </tbody>
           </table>
         </div>
@@ -405,8 +460,8 @@ export default function ConnectedApisTab() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Connect API
+            <button type="submit" className="btn btn-primary" disabled={addingApi}>
+              {addingApi ? "Connecting..." : "Connect API"}
             </button>
           </div>
         </form>
