@@ -305,7 +305,7 @@ export function AppProvider({ children }) {
   };
 
   const addToast = (message, type = "success", duration = 3500) => {
-    const id = Date.now();
+    const id = Date.now() + Math.random().toString(36).substring(2);
     setToasts((t) => [...t, { id, message, type }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), duration);
   };
