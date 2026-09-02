@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   List,
   Download,
+  Loader2,
 } from "lucide-react";
 import {
   PageHeader,
@@ -193,6 +194,9 @@ export default function Staff() {
   const [logs, setLogs] = useState([]);
   const [rolesMatrix, setRolesMatrix] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState(null);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
 
   const arrayToPermsObj = (arr) => {
     const obj = { dashboard: false, bookings: false, users: false, finance: false, support: false, cms: false, staff: false };
@@ -361,6 +365,7 @@ export default function Staff() {
       phone: "",
       role: "Booking Manager",
       tags: [],
+      password: "",
       permissions: {
         dashboard: true,
         bookings: true,
@@ -376,17 +381,19 @@ export default function Staff() {
 
   const handleCreateStaff = async (e) => {
     e.preventDefault();
-    if (!formStaff.name || !formStaff.email || !formStaff.phone) {
-      addToast("Please fill all mandatory fields", "error");
+    if (!formStaff.name || !formStaff.email || !formStaff.phone || !formStaff.password) {
+      addToast("Please fill all mandatory fields (Name, Email, Phone, Password)", "error");
       return;
     }
 
+    setIsSubmitting(true);
     try {
       await staffApi.create({
         name: formStaff.name,
         email: formStaff.email,
         phone: formStaff.phone,
         role: formStaff.role,
+        password: formStaff.password,
         department: "Operations",
         permissions: permsObjToArray(formStaff.permissions)
       });
@@ -395,10 +402,13 @@ export default function Staff() {
       fetchData();
     } catch (err) {
       addToast(err.message || "Failed to create staff", "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleToggleStaffStatus = async (id, currentStatus) => {
+    setUpdatingStatusId(id);
     try {
       const nextStatus = currentStatus === "active" ? "inactive" : "active";
       await staffApi.update(id, { status: nextStatus });
@@ -406,6 +416,8 @@ export default function Staff() {
       fetchData();
     } catch (err) {
       addToast(err.message || "Failed to update status", "error");
+    } finally {
+      setUpdatingStatusId(null);
     }
   };
 
@@ -421,6 +433,7 @@ export default function Staff() {
   };
 
   const handleSavePermissions = async () => {
+    setIsSavingPermissions(true);
     try {
       await staffApi.update(selectedStaff.id, {
         role: formStaff.role,
@@ -431,6 +444,8 @@ export default function Staff() {
       fetchData();
     } catch (err) {
       addToast(err.message || "Failed to update permissions", "error");
+    } finally {
+      setIsSavingPermissions(false);
     }
   };
 
@@ -663,11 +678,25 @@ export default function Staff() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedStaff.length === 0 ? (
+                    {loading ? (
                       <tr>
                         <td
                           colSpan={8}
-                          style={{ textAlign: "center", padding: "40px 10px" }}
+                          style={{ textAlign: "center", padding: "60px 10px" }}
+                        >
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                            <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "var(--brand-600)" }} />
+                            <span style={{ color: "var(--text-muted)", fontSize: 13, fontWeight: 500 }}>
+                              Loading staff records...
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : paginatedStaff.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-muted)" }}
                         >
                           No staff members found matching the filters.
                         </td>
@@ -785,11 +814,13 @@ export default function Staff() {
                                   handleToggleStaffStatus(member.id, member.status)
                                 }
                                 style={{ padding: "4px 8px", fontSize: 11 }}
-                                disabled={member.role === "Super Admin"}
+                                disabled={member.role === "Super Admin" || updatingStatusId === member.id}
                               >
-                                {member.status === "active"
-                                  ? "Ban Access"
-                                  : "Unban Access"}
+                                {updatingStatusId === member.id
+                                  ? "Updating..."
+                                  : member.status === "active"
+                                    ? "Ban Access"
+                                    : "Unban Access"}
                               </button>
                             </div>
                           </td>
@@ -801,7 +832,24 @@ export default function Staff() {
               </div>
             ) : (
               <div className="grid-2" style={{ gap: 16 }}>
-                {paginatedStaff.length === 0 ? (
+                {loading ? (
+                  <div
+                    style={{
+                      gridColumn: "span 2",
+                      textAlign: "center",
+                      padding: "60px 10px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
+                  >
+                    <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "var(--brand-600)" }} />
+                    <span style={{ color: "var(--text-muted)", fontSize: 13, fontWeight: 500 }}>
+                      Loading staff records...
+                    </span>
+                  </div>
+                ) : paginatedStaff.length === 0 ? (
                   <div
                     style={{
                       gridColumn: "span 2",
@@ -1015,9 +1063,11 @@ export default function Staff() {
                           }`}
                           onClick={() => handleToggleStaffStatus(member.id, member.status)}
                           style={{ padding: "4px 8px", fontSize: 11 }}
-                          disabled={member.role === "Super Admin"}
+                          disabled={member.role === "Super Admin" || updatingStatusId === member.id}
                         >
-                          {member.status === "active" ? "Ban" : "Unban"}
+                          {updatingStatusId === member.id
+                            ? "Wait..."
+                            : member.status === "active" ? "Ban" : "Unban"}
                         </button>
                       </div>
                     </div>
@@ -1244,27 +1294,43 @@ export default function Staff() {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">System Access Designation Role</label>
-            <select
-              className="form-input form-select"
-              value={formStaff.role}
-              onChange={(e) => handleRoleChangeInForm(e.target.value)}
-            >
-              <option value="Super Admin">
-                Super Admin (Full System Access)
-              </option>
-              <option value="Booking Manager">
-                Booking Manager (Bookings + CMS)
-              </option>
-              <option value="Support Lead">
-                Support Lead (Support Tickets + Chat)
-              </option>
-              <option value="Finance Auditor">
-                Finance Auditor (Refunds + Transactions)
-              </option>
-              <option value="CMS Manager">CMS Manager (CMS Editor)</option>
-            </select>
+          <div className="grid-2" style={{ gap: 12 }}>
+            <div className="form-group">
+              <label className="form-label">System Access Designation Role</label>
+              <select
+                className="form-input form-select"
+                value={formStaff.role}
+                onChange={(e) => handleRoleChangeInForm(e.target.value)}
+              >
+                <option value="Super Admin">
+                  Super Admin (Full System Access)
+                </option>
+                <option value="Booking Manager">
+                  Booking Manager (Bookings + CMS)
+                </option>
+                <option value="Support Lead">
+                  Support Lead (Support Tickets + Chat)
+                </option>
+                <option value="Finance Auditor">
+                  Finance Auditor (Refunds + Transactions)
+                </option>
+                <option value="CMS Manager">CMS Manager (CMS Editor)</option>
+              </select>
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Password *</label>
+              <input
+                type="password"
+                className="form-input"
+                placeholder="e.g. Staff@123"
+                value={formStaff.password || ""}
+                onChange={(e) =>
+                  setFormStaff({ ...formStaff, password: e.target.value })
+                }
+                required
+              />
+            </div>
           </div>
 
           <TagSelector
@@ -1361,8 +1427,8 @@ export default function Staff() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Onboard Staff Admin
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? "Onboarding..." : "Onboard Staff Admin"}
             </button>
           </div>
         </form>
@@ -1508,8 +1574,9 @@ export default function Staff() {
               type="button"
               className="btn btn-primary"
               onClick={handleSavePermissions}
+              disabled={isSavingPermissions}
             >
-              Save Overrides
+              {isSavingPermissions ? "Saving..." : "Save Overrides"}
             </button>
           </div>
         </div>
