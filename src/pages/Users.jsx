@@ -9,6 +9,7 @@ import {
   Download,
   LayoutGrid,
   List,
+  Loader2,
 } from "lucide-react";
 import {
   PageHeader,
@@ -29,7 +30,6 @@ const USER_TAGS = [
   "Disputed", "Blocked", "HolidayMaker",
 ];
 import {
-  mockUsers,
   mockFlightBookings,
   mockHotelBookings,
   mockCabBookings,
@@ -113,15 +113,15 @@ const getPackages = (userName) => {
 };
 
 export default function Users() {
-  const { addToast } = useApp();
-  const [users, setUsers] = useState(mockUsers);
-  const [stats, setStats] = useState({
-    total: mockUsers.length,
-    active: mockUsers.filter(u => u.status === 'active').length,
-    inactive: mockUsers.filter(u => u.status === 'inactive').length,
-    blocked: mockUsers.filter(u => u.status === 'blocked').length,
-  });
-  const [loading, setLoading] = useState(false);
+  const { addToast, userStats, fetchUserStats } = useApp();
+  const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState(() => ({
+    total: userStats?.total ?? 0,
+    active: userStats?.active ?? 0,
+    inactive: userStats?.inactive ?? 0,
+    blocked: userStats?.blocked ?? 0,
+  }));
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -135,9 +135,20 @@ export default function Users() {
 
   const location = useLocation();
 
+  useEffect(() => {
+    if (userStats) {
+      setStats({
+        total: userStats.total ?? 0,
+        active: userStats.active ?? 0,
+        inactive: userStats.inactive ?? 0,
+        blocked: userStats.blocked ?? 0,
+      });
+    }
+  }, [userStats]);
+
   const loadStats = async () => {
     try {
-      const statsData = await usersApi.getStats();
+      const statsData = await fetchUserStats();
       if (statsData) {
         setStats({
           total: statsData.total ?? 0,
@@ -147,7 +158,7 @@ export default function Users() {
         });
       }
     } catch {
-      // Keep existing/mock stats
+      // Keep existing stats
     }
   };
 
@@ -158,14 +169,15 @@ export default function Users() {
         status: statusFilter,
         search: search,
       });
-      if (res && Array.isArray(res.items) && res.items.length > 0) {
+      if (res && Array.isArray(res.items)) {
         setUsers(res.items);
-      } else if (res && Array.isArray(res.items) && res.items.length === 0 && (search || statusFilter !== 'all')) {
+      } else {
         setUsers([]);
       }
       await loadStats();
     } catch (err) {
-      console.warn("Using offline fallback users data:", err.message);
+      console.warn("Failed to fetch users:", err.message);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -1430,7 +1442,24 @@ export default function Users() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginated.length === 0 && (
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        style={{
+                          textAlign: "center",
+                          padding: 48,
+                          color: "var(--text-muted)",
+                          fontSize: 13,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                          <Loader2 size={18} style={{ animation: "spin 0.8s linear infinite", color: "var(--brand-500)" }} />
+                          <span>Loading users...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : paginated.length === 0 ? (
                     <tr>
                       <td
                         colSpan={7}
@@ -1444,8 +1473,8 @@ export default function Users() {
                         No users found
                       </td>
                     </tr>
-                  )}
-                  {paginated.map((u) => (
+                  ) : (
+                    paginated.map((u) => (
                     <tr key={u.id}>
                       <td>
                         <div
@@ -1564,20 +1593,27 @@ export default function Users() {
                             className="btn btn-ghost btn-icon btn-sm"
                             title="Delete User"
                             style={{ color: "var(--danger-500)" }}
-                            onClick={() => deleteUser(u.id, u.name)}
+                            onClick={() => handleDeletePrompt(u)}
                           >
                             <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>
           ) : (
             <div className="grid-2" style={{ gap: 16 }}>
-              {paginated.length === 0 ? (
+              {loading ? (
+                <div style={{ gridColumn: "span 2", textAlign: "center", padding: "40px 10px", color: "var(--text-muted)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <Loader2 size={18} style={{ animation: "spin 0.8s linear infinite", color: "var(--brand-500)" }} />
+                    <span>Loading users...</span>
+                  </div>
+                </div>
+              ) : paginated.length === 0 ? (
                 <div style={{ gridColumn: "span 2", textAlign: "center", padding: "40px 10px", color: "var(--text-muted)" }}>
                   No users found
                 </div>

@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { usersApi } from "../services/api.js";
 
 const AppContext = createContext(null);
 
@@ -195,7 +196,24 @@ export function AppProvider({ children }) {
   const [adminEmail, setAdminEmail] = useState(() => load("its_admin_email", "admin@itsglobal.in"));
   const [adminAvatar, setAdminAvatar] = useState(() => load("its_admin_avatar", ""));
   const [adminRole, setAdminRole] = useState(() => load("its_admin_role", "SUPER_ADMIN"));
-  const [adminPassword, setAdminPassword] = useState(() => load("its_admin_password", "Admin@123456"));
+  const [userStats, setUserStats] = useState(null);
+
+  const fetchUserStats = useCallback(async () => {
+    try {
+      const stats = await usersApi.getStats();
+      if (stats) {
+        setUserStats(stats);
+        return stats;
+      }
+    } catch {
+      // Silent error when unauthenticated or network failure
+    }
+    return null;
+  }, []);
+
+  useEffect(() => {
+    fetchUserStats();
+  }, [fetchUserStats]);
 
   const loginAdmin = (user, tokens) => {
     if (user) {
@@ -215,6 +233,7 @@ export function AppProvider({ children }) {
     if (tokens?.refreshToken) {
       localStorage.setItem("its_admin_refresh_token", tokens.refreshToken);
     }
+    fetchUserStats();
   };
 
   const logoutAdmin = () => {
@@ -222,6 +241,7 @@ export function AppProvider({ children }) {
     localStorage.removeItem("its_admin_refresh_token");
     localStorage.removeItem("its_admin_user_data");
     setAdminName("Super Admin");
+    setUserStats(null);
   };
 
   const updateAdminProfile = (name, email, avatar) => {
@@ -313,6 +333,9 @@ export function AppProvider({ children }) {
         logoutAdmin,
         updateAdminProfile,
         changeAdminPassword,
+        userStats,
+        setUserStats,
+        fetchUserStats,
       }}
     >
       {children}
