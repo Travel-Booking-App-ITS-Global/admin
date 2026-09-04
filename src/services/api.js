@@ -792,6 +792,65 @@ export const cmsApi = {
   },
 };
 
+export const hotelsApi = {
+  async getAllAdmin(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.city && params.city !== 'All') q.append('city', params.city);
+    if (params.propertyType && params.propertyType !== 'All') q.append('propertyType', params.propertyType);
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortOrder) q.append('sortOrder', params.sortOrder);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/hotels${queryString}`);
+    return res?.data || res;
+  },
+
+  async getByIdAdmin(id) {
+    const res = await apiRequest(`/admin/hotels/${id}`);
+    return res?.data || res;
+  },
+
+  async createAdmin(data) {
+    const res = await apiRequest('/admin/hotels', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateAdmin(id, data) {
+    const res = await apiRequest(`/admin/hotels/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteAdmin(id) {
+    const res = await apiRequest(`/admin/hotels/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  async getPublicSearch(params = {}) {
+    const q = new URLSearchParams();
+    if (params.city) q.append('city', params.city);
+    if (params.propertyType) q.append('propertyType', params.propertyType);
+    if (params.page) q.append('page', params.page);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/hotels/search${queryString}`);
+    return res?.data || res;
+  },
+
+  async getPublicDetails(id) {
+    const res = await apiRequest(`/hotels/${id}`);
+    return res?.data || res;
+  },
+};
+
 export default {
   API_BASE_URL,
   apiRequest,
@@ -805,6 +864,7 @@ export default {
   settingsApi,
   contactsApi,
   cmsApi,
+  hotelsApi,
   decodeJwt,
   isTokenExpired,
 };
