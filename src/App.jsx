@@ -18,7 +18,10 @@ import Flights from './pages/Flights.jsx';
 import { Cabs } from './pages/HotelsCabs.jsx';
 import HotelsListPage from './pages/hotels/HotelsListPage.jsx';
 import HotelFormPage from './pages/hotels/HotelFormPage.jsx';
-import Packages from './pages/Packages.jsx';
+import DestinationsListPage from './pages/destinations/DestinationsListPage.jsx';
+import DestinationFormPage from './pages/destinations/DestinationFormPage.jsx';
+import PackagesListPage from './pages/packages/PackagesListPage.jsx';
+import PackageFormPage from './pages/packages/PackageFormPage.jsx';
 import Support from './pages/Support.jsx';
 import Payments from './pages/Payments.jsx';
 import Staff from './pages/Staff.jsx';
@@ -56,12 +59,17 @@ function AdminShell() {
             <Route path="users"        element={<Users />} />
             <Route path="staff"        element={<Staff />} />
             <Route path="todos"        element={<Todos />} />
+            <Route path="destinations"          element={<DestinationsListPage />} />
+            <Route path="destinations/new"      element={<DestinationFormPage />} />
+            <Route path="destinations/edit/:id" element={<DestinationFormPage />} />
             <Route path="flights"      element={<Flights />} />
             <Route path="hotels"          element={<HotelsListPage />} />
             <Route path="hotels/new"      element={<HotelFormPage />} />
             <Route path="hotels/edit/:id" element={<HotelFormPage />} />
             <Route path="cabs"            element={<Cabs />} />
-            <Route path="packages"     element={<Packages />} />
+            <Route path="packages"          element={<PackagesListPage />} />
+            <Route path="packages/new"      element={<PackageFormPage />} />
+            <Route path="packages/edit/:id" element={<PackageFormPage />} />
             <Route path="itineraries"  element={<Itineraries />} />
             <Route path="ai-chat"      element={<AIChat />} />
             <Route path="reports"      element={<Reports />} />

@@ -718,6 +718,8 @@ export const settingsApi = {
 export const contactsApi = {
   async getAll(params = {}) {
     const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
     if (params.search) q.append('search', params.search);
     if (params.type && params.type !== 'All') q.append('type', params.type);
     const queryString = q.toString() ? `?${q.toString()}` : '';
@@ -851,6 +853,182 @@ export const hotelsApi = {
   },
 };
 
+export const destinationsApi = {
+  async getStats() {
+    const res = await apiRequest('/admin/destinations/stats');
+    return res?.data || res;
+  },
+
+  async getAll(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.country && params.country !== 'All') q.append('country', params.country);
+    if (params.status && params.status !== 'All') q.append('status', params.status);
+    if (params.badge && params.badge !== 'All') q.append('badge', params.badge);
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortOrder) q.append('sortOrder', params.sortOrder);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/destinations${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/destinations/${id}`);
+    return res?.data || res;
+  },
+
+  async create(data) {
+    const res = await apiRequest('/admin/destinations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, data) {
+    const res = await apiRequest(`/admin/destinations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/destinations/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  async createAttraction(destId, data) {
+    const res = await apiRequest(`/admin/destinations/${destId}/attractions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateAttraction(destId, attrId, data) {
+    const res = await apiRequest(`/admin/destinations/attractions/${attrId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteAttraction(destId, attrId) {
+    const res = await apiRequest(`/admin/destinations/attractions/${attrId}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  // Public simulator / client endpoints
+  async getFeatured() {
+    const res = await apiRequest('/destinations/featured');
+    return res?.data || res;
+  },
+
+  async getPublicList(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.country && params.country !== 'All') q.append('country', params.country);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/destinations${queryString}`);
+    return res?.data || res;
+  },
+
+  async getPublicDetails(id) {
+    const res = await apiRequest(`/destinations/${id}`);
+    return res?.data || res;
+  },
+
+  async getPublicAttraction(id) {
+    const res = await apiRequest(`/destinations/attractions/${id}`);
+    return res?.data || res;
+  },
+};
+
+export const packagesApi = {
+  async getStats() {
+    const res = await apiRequest('/admin/packages/stats');
+    return res?.data || res;
+  },
+
+  async getAll(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.destination && params.destination !== 'All') q.append('destination', params.destination);
+    if (params.travelType && params.travelType !== 'All') q.append('travelType', params.travelType);
+    if (params.status && params.status !== 'All') q.append('status', params.status);
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortOrder) q.append('sortOrder', params.sortOrder);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/packages${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/packages/${id}`);
+    return res?.data || res;
+  },
+
+  async create(data) {
+    const res = await apiRequest('/admin/packages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, data) {
+    const res = await apiRequest(`/admin/packages/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateStatus(id, status) {
+    const res = await apiRequest(`/admin/packages/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/packages/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  // Public / Simulator endpoints
+  async getFeatured() {
+    const res = await apiRequest('/packages/featured');
+    return res?.data || res;
+  },
+
+  async getPublicList(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.destination && params.destination !== 'All') q.append('destination', params.destination);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/packages${queryString}`);
+    return res?.data || res;
+  },
+
+  async getPublicDetails(id) {
+    const res = await apiRequest(`/packages/${id}`);
+    return res?.data || res;
+  },
+};
+
 export default {
   API_BASE_URL,
   apiRequest,
@@ -865,9 +1043,12 @@ export default {
   contactsApi,
   cmsApi,
   hotelsApi,
+  destinationsApi,
+  packagesApi,
   decodeJwt,
   isTokenExpired,
 };
+
 
 
 

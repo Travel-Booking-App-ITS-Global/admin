@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { MessageCircle, CheckCircle, User, Clock, AlertTriangle, Plus, Download } from "lucide-react";
-import { PageHeader, StatusBadge, TableFilters, Avatar } from "../components/ui/index.jsx";
+import { PageHeader, StatusBadge, TableFilters, Avatar, Pagination } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
 import { mockTickets } from "../data/mockData.js";
@@ -22,6 +22,10 @@ export default function Support() {
   const [search, setSearch] = useState("");
   const location = useLocation();
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const limit = 8;
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const q = params.get("search");
@@ -33,6 +37,11 @@ export default function Support() {
   }, [location.search]);
 
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Reset page when search or filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
   const [selected, setSelected] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [assignedAgent, setAssignedAgent] = useState("Pooja S.");
@@ -257,7 +266,7 @@ export default function Support() {
                 No support tickets found
               </div>
             )}
-            {filtered.map((t) => (
+            {filtered.slice((page - 1) * limit, page * limit).map((t) => (
               <div
                 key={t.id}
                 onClick={() => setSelected(t)}
@@ -349,6 +358,13 @@ export default function Support() {
               </div>
             ))}
           </div>
+
+          <Pagination
+            page={page}
+            total={filtered.length}
+            perPage={limit}
+            onChange={(newPage) => setPage(newPage)}
+          />
         </div>
       </div>
 

@@ -136,17 +136,89 @@ export function TableFilters({ search, onSearch, children }) {
 }
 
 export function Pagination({ page, total, perPage = 10, onChange }) {
-  const pages = Math.ceil(total / perPage);
-  if (pages <= 1) return null;
+  const totalPages = Math.ceil(total / perPage);
+  if (totalPages <= 1) return null;
+
+  // Smart page range generation (e.g., 1, 2, 3, '...', 10)
+  const getPageNumbers = () => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (page <= 4) {
+      return [1, 2, 3, 4, 5, "...", totalPages];
+    }
+    if (page >= totalPages - 3) {
+      return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, "...", page - 1, page, page + 1, "...", totalPages];
+  };
+
+  const pageNumbers = getPageNumbers();
+  const startItem = (page - 1) * perPage + 1;
+  const endItem = Math.min(page * perPage, total);
+
   return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:16, fontSize:13, color:'var(--text-secondary)' }}>
-      <span>Showing {(page-1)*perPage+1}–{Math.min(page*perPage,total)} of {total}</span>
-      <div style={{ display:'flex', gap:4 }}>
-        <button className="btn btn-secondary btn-sm" disabled={page===1} onClick={() => onChange(page-1)}>← Prev</button>
-        {Array.from({length:pages},(_, i)=>i+1).map(p => (
-          <button key={p} className={`btn btn-sm ${p===page?'btn-primary':'btn-secondary'}`} onClick={() => onChange(p)}>{p}</button>
-        ))}
-        <button className="btn btn-secondary btn-sm" disabled={page===pages} onClick={() => onChange(page+1)}>Next →</button>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginTop: 20,
+        paddingTop: 14,
+        borderTop: "1px solid var(--border-default)",
+        fontSize: 13,
+        color: "var(--text-secondary)",
+        flexWrap: "wrap",
+        gap: 12,
+      }}
+    >
+      <div>
+        Showing <strong style={{ color: "var(--text-primary)" }}>{startItem}–{endItem}</strong> of{" "}
+        <strong style={{ color: "var(--text-primary)" }}>{total}</strong> records
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+          style={{ opacity: page <= 1 ? 0.5 : 1 }}
+        >
+          ← Prev
+        </button>
+        {pageNumbers.map((p, idx) =>
+          p === "..." ? (
+            <span
+              key={`ellipsis-${idx}`}
+              style={{ padding: "0 6px", color: "var(--text-muted)", userSelect: "none" }}
+            >
+              ...
+            </span>
+          ) : (
+            <button
+              key={p}
+              type="button"
+              className={`btn btn-sm ${p === page ? "btn-primary" : "btn-secondary"}`}
+              style={{
+                minWidth: 32,
+                padding: "4px 8px",
+                fontWeight: p === page ? 700 : 500,
+              }}
+              onClick={() => onChange(p)}
+            >
+              {p}
+            </button>
+          )
+        )}
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={page >= totalPages}
+          onClick={() => onChange(page + 1)}
+          style={{ opacity: page >= totalPages ? 0.5 : 1 }}
+        >
+          Next →
+        </button>
       </div>
     </div>
   );

@@ -23,8 +23,9 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: 'Bookings',
+    label: 'Bookings & Inventory',
     items: [
+      { to: '/destinations', label: 'Destinations',  icon: Compass },
       { to: '/flights',    label: 'Flights',         icon: Plane },
       { to: '/hotels',     label: 'Hotels',          icon: Hotel },
       { to: '/cabs',       label: 'Cabs',            icon: Car },

@@ -11,7 +11,7 @@ import {
   Copy,
   AlertCircle,
 } from "lucide-react";
-import { PageHeader } from "../../components/ui/index.jsx";
+import { PageHeader, Pagination } from "../../components/ui/index.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import { useApp } from "../../store/AppContext.jsx";
 import { contactsApi } from "../../services/api.js";
@@ -51,6 +51,12 @@ export default function ContactsPage() {
 
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Pagination & Filters State
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(12);
+  const [total, setTotal] = useState(0);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("All");
 
@@ -71,19 +77,36 @@ export default function ContactsPage() {
   const [formErrors, setFormErrors] = useState({});
 
   const loadContacts = useCallback(async () => {
+    setLoading(true);
     try {
-      const data = await contactsApi.getAll({
+      const res = await contactsApi.getAll({
+        page,
+        limit,
         search: searchTerm,
         type: selectedType,
       });
-      setContacts(Array.isArray(data) ? data : []);
+      if (res && res.items) {
+        setContacts(res.items);
+        setTotal(res.pagination?.total || 0);
+      } else if (Array.isArray(res)) {
+        setContacts(res);
+        setTotal(res.length);
+      } else {
+        setContacts([]);
+        setTotal(0);
+      }
     } catch (err) {
       console.warn("Failed to load contacts:", err);
       addToast("Failed to load contacts from database", "error");
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, selectedType, addToast]);
+  }, [page, limit, searchTerm, selectedType, addToast]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, selectedType]);
 
   useEffect(() => {
     loadContacts();
@@ -420,6 +443,14 @@ export default function ContactsPage() {
           ))}
         </div>
       )}
+
+      {/* Pagination */}
+      <Pagination
+        page={page}
+        total={total}
+        perPage={limit}
+        onChange={(newPage) => setPage(newPage)}
+      />
 
       {/* Add Contact Modal */}
       <Modal

@@ -14,7 +14,7 @@ import {
   ArrowRight,
   ArrowLeft,
 } from "lucide-react";
-import { PageHeader, StatusBadge, Avatar, ConfirmDeleteModal } from "../components/ui/index.jsx";
+import { PageHeader, StatusBadge, Avatar, ConfirmDeleteModal, Pagination } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
 import TagSelector from "../components/ui/TagSelector.jsx";
 import { useApp } from "../store/AppContext.jsx";
@@ -58,61 +58,65 @@ const INITIAL_TODOS = [
     description:
       "CMS update for Rajasthan package with new departure dates starting October 2025.",
     category: "CMS",
-    priority: "medium",
+    priority: "low",
     status: "completed",
-    dueDate: "2025-07-25",
-    assignedTo: "Riya Sen",
-    created: "2025-07-12",
+    dueDate: "2025-07-10",
+    assignedTo: "Meera Nair",
+    created: "2025-07-08",
     tags: ["CMS", "Package"],
   },
   {
     id: "TSK004",
-    title: "Update Driver Onboarding Form in CRM",
+    title: "Driver background verification check",
     description:
-      "Revise the driver application form fields to capture background verification details properly.",
-    category: "Cabs",
-    priority: "low",
-    status: "pending",
-    dueDate: "2025-07-30",
-    assignedTo: "Anjali Mehta",
-    created: "2025-07-17",
+      "Verify background and police check docs for newly onboarded Delhi cab drivers.",
+    category: "Operations",
+    priority: "medium",
+    status: "in_progress",
+    dueDate: "2025-07-22",
+    assignedTo: "Vikram Malhotra",
+    created: "2025-07-14",
     tags: ["Driver", "Onboarding"],
   },
   {
     id: "TSK005",
-    title: "Support ticket TKT0093 escalation",
+    title: "Update cancellation policy on terms page",
     description:
-      "Follow up with customer Rohit Verma regarding driver not arriving for airport transfer.",
-    category: "Support",
+      "Align cancellation fee structure with new DGCA air passenger charter guidelines.",
+    category: "Legal",
+    priority: "low",
+    status: "pending",
+    dueDate: "2025-07-25",
+    assignedTo: "Pooja Sharma",
+    created: "2025-07-16",
+    tags: ["CMS", "Review"],
+  },
+  {
+    id: "TSK006",
+    title: "Review hotel aggregator markup settings",
+    description:
+      "Examine weekend surge pricing and affiliate commission split on luxury resort inventory.",
+    category: "Finance",
     priority: "high",
     status: "in_progress",
-    dueDate: "2025-07-17",
-    assignedTo: "Rohan Das",
+    dueDate: "2025-07-19",
+    assignedTo: "Devansh Dixit",
     created: "2025-07-17",
-    tags: ["Escalation", "Cab"],
+    tags: ["Finance", "API"],
   },
 ];
 
-const STAFF_MEMBERS = [
-  "Aarush Singhania",
-  "Devansh Dixit",
-  "Riya Sen",
-  "Anjali Mehta",
-  "Rohan Das",
-  "Pooja Sharma",
-  "Super Admin",
-];
-
-const CATEGORIES = ["System", "Payments", "CMS", "Cabs", "Support", "General"];
-
 export default function Todos() {
   const { addToast } = useApp();
+
   const [todos, setTodos] = useState(() => {
     const saved = localStorage.getItem("itsglobal_todos");
     return saved ? JSON.parse(saved) : INITIAL_TODOS;
   });
 
   // Filters & State
+  const [page, setPage] = useState(1);
+  const limit = 10;
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -120,6 +124,11 @@ export default function Todos() {
   const [viewMode, setViewMode] = useState("grid"); // 'table' or 'grid' (represented as Kanban board)
   const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, priorityFilter, categoryFilter]);
 
   const [todoToDelete, setTodoToDelete] = useState(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -512,7 +521,7 @@ export default function Todos() {
                       </td>
                     </tr>
                   ) : (
-                    filteredTodos.map((todo) => (
+                    filteredTodos.slice((page - 1) * limit, page * limit).map((todo) => (
                       <tr key={todo.id}>
                         <td>
                           <button
@@ -669,6 +678,14 @@ export default function Todos() {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            <Pagination
+              page={page}
+              total={filteredTodos.length}
+              perPage={limit}
+              onChange={(newPage) => setPage(newPage)}
+            />
           </div>
         </div>
       ) : (

@@ -17,7 +17,7 @@ import {
   ShieldCheck,
   CheckCircle,
 } from "lucide-react";
-import { PageHeader } from "../../components/ui/index.jsx";
+import { PageHeader, Pagination } from "../../components/ui/index.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import { useApp } from "../../store/AppContext.jsx";
 import { hotelsApi } from "../../services/api.js";
@@ -37,7 +37,12 @@ export default function HotelsListPage() {
     totalFiveStar: 0,
   });
 
-  // Filters
+  // Pagination & Filters
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(12);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("All");
   const [viewMode, setViewMode] = useState("grid"); // 'grid' or 'table'
@@ -51,11 +56,17 @@ export default function HotelsListPage() {
     setLoading(true);
     try {
       const res = await hotelsApi.getAllAdmin({
+        page,
+        limit,
         search: searchTerm,
         propertyType: selectedType,
       });
       if (res) {
         setHotels(res.items || []);
+        if (res.pagination) {
+          setTotal(res.pagination.total || 0);
+          setTotalPages(res.pagination.totalPages || 1);
+        }
         if (res.stats) setStats(res.stats);
       }
     } catch (err) {
@@ -64,7 +75,12 @@ export default function HotelsListPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, selectedType, addToast]);
+  }, [page, limit, searchTerm, selectedType, addToast]);
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, selectedType]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -630,6 +646,14 @@ export default function HotelsListPage() {
           </table>
         </div>
       )}
+
+      {/* Pagination */}
+      <Pagination
+        page={page}
+        total={total}
+        perPage={limit}
+        onChange={(newPage) => setPage(newPage)}
+      />
 
       {/* Delete Confirmation Modal */}
       <Modal
