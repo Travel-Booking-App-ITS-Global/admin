@@ -1029,6 +1029,94 @@ export const packagesApi = {
   },
 };
 
+export const couponsApi = {
+  async getStats() {
+    const res = await apiRequest('/admin/coupons/stats');
+    return res?.data || res;
+  },
+
+  async getAll(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.category && params.category !== 'All' && params.category !== 'ALL') q.append('category', params.category);
+    if (params.status && params.status !== 'All') q.append('status', params.status);
+    if (params.discountType && params.discountType !== 'All' && params.discountType !== 'ALL') q.append('discountType', params.discountType);
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortOrder) q.append('sortOrder', params.sortOrder);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/coupons${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/coupons/${id}`);
+    return res?.data || res;
+  },
+
+  async create(data) {
+    const res = await apiRequest('/admin/coupons', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, data) {
+    const res = await apiRequest(`/admin/coupons/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateStatus(id, status) {
+    const res = await apiRequest(`/admin/coupons/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/coupons/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  async seed() {
+    const res = await apiRequest('/admin/coupons/seed', {
+      method: 'POST',
+    });
+    return res?.data || res;
+  },
+
+  async testValidate(data) {
+    const res = await apiRequest('/admin/coupons/test-validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  // Public portal methods
+  async getPublicList(category) {
+    const q = category ? `?category=${category}` : '';
+    const res = await apiRequest(`/coupons/public${q}`);
+    return res?.data || res;
+  },
+
+  async validatePublic(data) {
+    const res = await apiRequest('/coupons/validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+};
+
 export default {
   API_BASE_URL,
   apiRequest,
@@ -1045,9 +1133,11 @@ export default {
   hotelsApi,
   destinationsApi,
   packagesApi,
+  couponsApi,
   decodeJwt,
   isTokenExpired,
 };
+
 
 
 

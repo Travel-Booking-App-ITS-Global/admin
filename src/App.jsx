@@ -22,6 +22,7 @@ import DestinationsListPage from './pages/destinations/DestinationsListPage.jsx'
 import DestinationFormPage from './pages/destinations/DestinationFormPage.jsx';
 import PackagesListPage from './pages/packages/PackagesListPage.jsx';
 import PackageFormPage from './pages/packages/PackageFormPage.jsx';
+import CouponsListPage from './pages/coupons/CouponsListPage.jsx';
 import Support from './pages/Support.jsx';
 import Payments from './pages/Payments.jsx';
 import Staff from './pages/Staff.jsx';
@@ -70,6 +71,7 @@ function AdminShell() {
             <Route path="packages"          element={<PackagesListPage />} />
             <Route path="packages/new"      element={<PackageFormPage />} />
             <Route path="packages/edit/:id" element={<PackageFormPage />} />
+            <Route path="coupons"           element={<CouponsListPage />} />
             <Route path="itineraries"  element={<Itineraries />} />
             <Route path="ai-chat"      element={<AIChat />} />
             <Route path="reports"      element={<Reports />} />
