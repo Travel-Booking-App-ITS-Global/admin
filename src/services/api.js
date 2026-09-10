@@ -756,6 +756,84 @@ export const contactsApi = {
   },
 };
 
+export const onboardingApi = {
+  async getAll() {
+    const res = await apiRequest('/admin/cms/onboarding');
+    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+  },
+  async create(data) {
+    const res = await apiRequest('/admin/cms/onboarding', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async update(id, data) {
+    const res = await apiRequest(`/admin/cms/onboarding/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async toggleStatus(id) {
+    const res = await apiRequest(`/admin/cms/onboarding/${id}/toggle-status`, {
+      method: 'PATCH',
+    });
+    return res?.data || res;
+  },
+  async reorder(slides) {
+    const res = await apiRequest('/admin/cms/onboarding/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ slides }),
+    });
+    return res?.data || res;
+  },
+  async delete(id) {
+    const res = await apiRequest(`/admin/cms/onboarding/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+  async getPublicSlides() {
+    const res = await apiRequest('/auth/onboarding');
+    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+  },
+};
+
+export const uploadApi = {
+  async uploadImage(file, folder = 'onboarding') {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', folder);
+
+    const token = localStorage.getItem(TOKEN_KEY);
+    const url = `${API_BASE_URL}/admin/upload/image`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Image upload failed');
+    }
+    return data?.data || data;
+  },
+
+  async uploadBase64(base64Data, folder = 'onboarding') {
+    const res = await apiRequest('/admin/upload/base64', {
+      method: 'POST',
+      body: JSON.stringify({ image: base64Data, folder }),
+    });
+    return res?.data || res;
+  },
+};
+
+
 export const cmsApi = {
   async getFaqs() {
     const res = await apiRequest('/admin/cms/faqs');
@@ -792,6 +870,13 @@ export const cmsApi = {
     });
     return res?.data || res;
   },
+  // Onboarding Slides aliases
+  getOnboardingSlides: onboardingApi.getAll,
+  createOnboardingSlide: onboardingApi.create,
+  updateOnboardingSlide: onboardingApi.update,
+  toggleOnboardingSlideStatus: onboardingApi.toggleStatus,
+  reorderOnboardingSlides: onboardingApi.reorder,
+  deleteOnboardingSlide: onboardingApi.delete,
 };
 
 export const hotelsApi = {
@@ -1130,6 +1215,8 @@ export default {
   settingsApi,
   contactsApi,
   cmsApi,
+  onboardingApi,
+  uploadApi,
   hotelsApi,
   destinationsApi,
   packagesApi,

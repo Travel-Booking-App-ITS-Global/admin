@@ -13,6 +13,7 @@ import { useApp } from "../store/AppContext.jsx";
 import api from "../services/api.js";
 import SettingsComponent from "./settings/Settings.jsx";
 import ContactsComponent from "./contacts/ContactsPage.jsx";
+import OnboardingSlidesTab from "./cms/OnboardingSlidesTab.jsx";
 import {
   AreaChart,
   Area,
@@ -382,7 +383,7 @@ export function AIChat() {
 /* =================== CMS =================== */
 export function CMS() {
   const { addToast } = useApp();
-  const [tab, setTab] = useState("faqs");
+  const [tab, setTab] = useState("onboarding");
   const [faqs, setFaqs] = useState([]);
   const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -510,16 +511,21 @@ export function CMS() {
         subtitle="FAQs, policies, and static pages"
       />
       <div className="tabs">
-        {["faqs", "policies"].map((t) => (
+        {[
+          { id: "onboarding", label: "📱 Onboarding Carousel" },
+          { id: "faqs", label: "❓ FAQs" },
+          { id: "policies", label: "📄 Policies" },
+        ].map((t) => (
           <button
-            key={t}
-            className={`tab-btn${tab === t ? " active" : ""}`}
-            onClick={() => setTab(t)}
+            key={t.id}
+            className={`tab-btn${tab === t.id ? " active" : ""}`}
+            onClick={() => setTab(t.id)}
           >
-            {t === "faqs" ? "❓ FAQs" : "📄 Policies"}
+            {t.label}
           </button>
         ))}
       </div>
+      {tab === "onboarding" && <OnboardingSlidesTab />}
       {tab === "faqs" && (
         <div className="card">
           <div className="card-header">
