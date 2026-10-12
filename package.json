@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && cp dist/index.html dist/404.html",
+    "build": "vite build && node -e \"const fs = require('fs'); fs.copyFileSync('dist/index.html', 'dist/404.html')\"",
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",
@@ -15,6 +15,8 @@
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-is": "^19.2.8",
+    "react-quill-new": "^3.8.3",
     "react-router-dom": "^7.18.1",
     "recharts": "^3.9.2"
   },

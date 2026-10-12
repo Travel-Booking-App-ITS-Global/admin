@@ -1,29 +1,64 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Compass } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff, Compass, ArrowLeft, CheckCircle } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../store/AppContext.jsx';
+import { authService } from '../services/api.js';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { addToast, toggleTheme, theme } = useApp();
+  const location = useLocation();
+  const { addToast, toggleTheme, theme, loginAdmin } = useApp();
   const [email, setEmail] = useState('admin@itsglobal.in');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Forgot password mode
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('admin@itsglobal.in');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
-    if (!email || !password) { setError('Please enter both email and password.'); return; }
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    if (password === 'admin123') {
-      addToast('Welcome back, Super Admin!', 'success');
-      navigate('/dashboard');
-    } else {
-      setError('Invalid credentials. Try password: admin123');
+    try {
+      const data = await authService.login(email, password);
+      loginAdmin(data.user, data.tokens);
+      addToast(`Welcome back, ${data.user?.name || 'Admin'}!`, 'success');
+      const target = location.state?.from?.pathname || '/dashboard';
+      navigate(target, { replace: true });
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err.message || 'Authentication failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setForgotError('');
+    if (!forgotEmail) {
+      setForgotError('Please enter your admin email.');
+      return;
+    }
+    setForgotLoading(true);
+    try {
+      await authService.forgotPassword(forgotEmail);
+      setForgotSuccess(true);
+      addToast('Password reset link sent to your email!', 'success');
+    } catch (err) {
+      setForgotError(err.message || 'Failed to send reset link.');
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -77,7 +112,7 @@ export default function Login() {
             </span>
           </div>
           <p style={{ fontSize:15, color:'rgba(255,255,255,.55)', lineHeight:1.7, maxWidth:420 }}>
-            Manage flights, hotels, cabs, packages, AI itineraries and chat — all from one powerful admin dashboard built for enterprise scale.
+            Manage flights, hotels, cabs, packages, AI itineraries and chat — all connected to high-performance NestJS REST API with JWT authentication.
           </p>
 
           {/* Feature Pills */}
@@ -124,7 +159,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right — Login Form */}
+      {/* Right — Login / Forgot Password Form */}
       <div style={{
         width: 500,
         display: 'flex',
@@ -147,83 +182,158 @@ export default function Login() {
           {theme === 'dark' ? '☀️' : '🌙'}
         </button>
 
-        <div style={{ marginBottom:40 }}>
-          <h1 style={{ fontFamily:'var(--font-heading)', fontSize:28, fontWeight:800, color:'var(--text-primary)', marginBottom:8 }}>
-            Sign in to Admin
-          </h1>
-          <p style={{ fontSize:14, color:'var(--text-muted)' }}>
-            Enter your admin credentials to access the panel
-          </p>
-        </div>
-
-        <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:18 }}>
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input
-              id="login-email"
-              className="form-input"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="admin@itsglobal.in"
-              autoComplete="email"
-            />
-          </div>
-
-          <div className="form-group">
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-              <label className="form-label" style={{ margin:0 }}>Password</label>
-              <a href="#" style={{ fontSize:12, color:'var(--brand-600)', fontWeight:500 }}>Forgot password?</a>
+        {!forgotMode ? (
+          <div>
+            <div style={{ marginBottom:36 }}>
+              <h1 style={{ fontFamily:'var(--font-heading)', fontSize:28, fontWeight:800, color:'var(--text-primary)', marginBottom:8 }}>
+                Sign in to Admin
+              </h1>
+              <p style={{ fontSize:14, color:'var(--text-muted)' }}>
+                Enter your admin credentials to access the management portal
+              </p>
             </div>
-            <div style={{ position:'relative' }}>
-              <input
-                id="login-password"
-                className="form-input"
-                type={showPw ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                autoComplete="current-password"
-                style={{ paddingRight:40 }}
-              />
+
+            <form onSubmit={handleLogin} style={{ display:'flex', flexDirection:'column', gap:18 }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="login-email">Email Address</label>
+                <input
+                  id="login-email"
+                  className="form-input"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="admin@itsglobal.in"
+                  autoComplete="email"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                  <label className="form-label" htmlFor="login-password" style={{ margin:0 }}>Password</label>
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(true); setForgotSuccess(false); setForgotError(''); }}
+                    style={{ fontSize:12, color:'var(--brand-600)', fontWeight:500, background:'none', border:'none', cursor:'pointer', padding:0 }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+                <div style={{ position:'relative' }}>
+                  <input
+                    id="login-password"
+                    className="form-input"
+                    type={showPw ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
+                    style={{ paddingRight:40 }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(!showPw)}
+                    style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', cursor:'pointer', background:'none', border:'none', display:'flex', alignItems:'center' }}
+                  >
+                    {showPw ? <EyeOff size={16}/> : <Eye size={16}/>}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div style={{ background:'rgba(239, 68, 68, 0.1)', border:'1px solid rgba(239, 68, 68, 0.3)', borderRadius:'var(--radius-md)', padding:'10px 14px', fontSize:13, color:'#ef4444' }}>
+                  ⚠️ {error}
+                </div>
+              )}
+
               <button
-                type="button"
-                onClick={() => setShowPw(!showPw)}
-                style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', cursor:'pointer', background:'none', border:'none', display:'flex', alignItems:'center' }}
+                id="login-submit"
+                className="btn btn-primary btn-lg"
+                type="submit"
+                disabled={loading}
+                style={{ width:'100%', justifyContent:'center', marginTop:4, fontSize:15 }}
               >
-                {showPw ? <EyeOff size={16}/> : <Eye size={16}/>}
+                {loading ? (
+                  <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <span style={{ width:16, height:16, borderRadius:'50%', border:'2px solid rgba(255,255,255,.3)', borderTopColor:'#fff', animation:'spin 0.7s linear infinite', display:'inline-block' }}/>
+                    Signing in…
+                  </span>
+                ) : 'Sign In'}
               </button>
-            </div>
+            </form>
           </div>
+        ) : (
+          <div>
+            <button
+              type="button"
+              onClick={() => setForgotMode(false)}
+              style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:13, color:'var(--text-muted)', background:'none', border:'none', cursor:'pointer', padding:0, marginBottom:20 }}
+            >
+              <ArrowLeft size={16} /> Back to Sign In
+            </button>
 
-          {error && (
-            <div style={{ background:'var(--danger-50)', border:'1px solid var(--danger-400)', borderRadius:'var(--radius-md)', padding:'10px 14px', fontSize:13, color:'var(--danger-600)' }}>
-              ⚠ {error}
+            <div style={{ marginBottom:28 }}>
+              <h1 style={{ fontFamily:'var(--font-heading)', fontSize:26, fontWeight:800, color:'var(--text-primary)', marginBottom:8 }}>
+                Reset Password
+              </h1>
+              <p style={{ fontSize:14, color:'var(--text-muted)' }}>
+                Enter your admin email address to receive password reset instructions.
+              </p>
             </div>
-          )}
 
-          <button
-            id="login-submit"
-            className="btn btn-primary btn-lg"
-            type="submit"
-            disabled={loading}
-            style={{ width:'100%', justifyContent:'center', marginTop:4, fontSize:15 }}
-          >
-            {loading ? (
-              <span style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ width:16, height:16, borderRadius:'50%', border:'2px solid rgba(255,255,255,.3)', borderTopColor:'#fff', animation:'spin 0.7s linear infinite', display:'inline-block' }}/>
-                Signing in…
-              </span>
-            ) : 'Sign In'}
-          </button>
+            {forgotSuccess ? (
+              <div style={{ background:'rgba(34, 197, 94, 0.1)', border:'1px solid rgba(34, 197, 94, 0.3)', borderRadius:'var(--radius-md)', padding:'16px', textAlign:'center' }}>
+                <CheckCircle size={36} color="#22c55e" style={{ margin:'0 auto 10px' }} />
+                <div style={{ fontWeight:700, color:'var(--text-primary)', marginBottom:4 }}>Check your inbox</div>
+                <div style={{ fontSize:13, color:'var(--text-muted)' }}>
+                  We have sent reset instructions to <strong>{forgotEmail}</strong>.
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setForgotMode(false)}
+                  style={{ marginTop:16, width:'100%', justifyContent:'center' }}
+                >
+                  Back to Sign In
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} style={{ display:'flex', flexDirection:'column', gap:18 }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="forgot-email">Admin Email Address</label>
+                  <input
+                    id="forgot-email"
+                    className="form-input"
+                    type="email"
+                    value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                    placeholder="admin@itsglobal.in"
+                    required
+                  />
+                </div>
 
-          <div style={{ textAlign:'center', fontSize:12, color:'var(--text-muted)', marginTop:4 }}>
-            Demo credentials: <strong style={{ color:'var(--text-primary)' }}>admin123</strong>
+                {forgotError && (
+                  <div style={{ background:'rgba(239, 68, 68, 0.1)', border:'1px solid rgba(239, 68, 68, 0.3)', borderRadius:'var(--radius-md)', padding:'10px 14px', fontSize:13, color:'#ef4444' }}>
+                    ⚠️ {forgotError}
+                  </div>
+                )}
+
+                <button
+                  className="btn btn-primary btn-lg"
+                  type="submit"
+                  disabled={forgotLoading}
+                  style={{ width:'100%', justifyContent:'center', fontSize:15 }}
+                >
+                  {forgotLoading ? 'Sending link…' : 'Send Reset Link'}
+                </button>
+              </form>
+            )}
           </div>
-        </form>
+        )}
 
         <div style={{ marginTop:40, paddingTop:20, borderTop:'1px solid var(--border-default)', fontSize:12, color:'var(--text-muted)', textAlign:'center' }}>
-          © 2025 ITS Global Travel Technologies. All rights reserved.
+          © 2026 ITS Global Travel Technologies. All rights reserved.
         </div>
       </div>
     </div>

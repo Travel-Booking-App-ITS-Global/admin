@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Camera,
   User,
@@ -12,56 +12,64 @@ import {
   FileText,
   Download,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
+import { settingsApi } from "../../services/api.js";
 
 export default function ProfileTab() {
   const { adminName, adminEmail, adminAvatar, updateAdminProfile, addToast } =
     useApp();
 
   // Basic Profile State
-  const [profileName, setProfileName] = useState(adminName);
-  const [profileEmail, setProfileEmail] = useState(adminEmail);
-  const [profileAvatar, setProfileAvatar] = useState(adminAvatar);
+  const [profileName, setProfileName] = useState(adminName || "");
+  const [profileEmail, setProfileEmail] = useState(adminEmail || "");
+  const [profileAvatar, setProfileAvatar] = useState(adminAvatar || "");
 
-  // Extended Profile State (Mocked for Super Admin Details)
-  const [profileRole, setProfileRole] = useState("Super Administrator");
-  const [profilePhone, setProfilePhone] = useState("+1 (555) 123-4567");
-  const [profileLocation, setProfileLocation] = useState("San Francisco, CA");
-  const [profileBio, setProfileBio] = useState(
-    "Leading the tech infrastructure and global operations for the platform.",
-  );
+  // Extended Profile State
+  const [profileRole, setProfileRole] = useState("");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileLocation, setProfileLocation] = useState("");
+  const [profileBio, setProfileBio] = useState("");
 
   // Vault / Document Locker State
-  const [vaultDocs, setVaultDocs] = useState([
-    {
-      id: "doc_1",
-      name: "SuperAdmin_NDA_Signed.pdf",
-      size: "2.4 MB",
-      date: "Oct 12, 2025",
-      tags: ["Legal", "Signed"],
-    },
-    {
-      id: "doc_2",
-      name: "Project_Architecture_V2.docx",
-      size: "1.1 MB",
-      date: "Nov 05, 2025",
-      tags: ["Technical", "Design"],
-    },
-    {
-      id: "doc_3",
-      name: "Personal_ID_Copy.png",
-      size: "845 KB",
-      date: "Jan 18, 2026",
-      tags: ["Identity", "Personal"],
-    },
-  ]);
+  const [vaultDocs, setVaultDocs] = useState([]);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [docToDelete, setDocToDelete] = useState(null);
 
   // Upload/Search/Filter states for tags
   const [selectedUploadTag, setSelectedUploadTag] = useState("General");
   const [vaultSearchTerm, setVaultSearchTerm] = useState("");
   const [activeVaultFilter, setActiveVaultFilter] = useState("All");
   const vaultFilterTags = ["All", "Legal", "Technical", "Identity", "Finance", "General"];
+
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const data = await settingsApi.getProfile();
+        if (data) {
+          if (data.name) setProfileName(data.name);
+          if (data.email) setProfileEmail(data.email);
+          if (data.avatar) setProfileAvatar(data.avatar);
+          if (data.role) setProfileRole(data.role);
+          if (data.phone) setProfilePhone(data.phone);
+          if (data.location) setProfileLocation(data.location);
+          if (data.bio) setProfileBio(data.bio);
+          if (data.vaultDocs) setVaultDocs(data.vaultDocs);
+        }
+      } catch (err) {
+        console.error("Failed to load admin profile", err);
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+    loadProfile();
+  }, []);
 
 
   const handleAvatarChange = (e) => {
@@ -74,46 +82,93 @@ export default function ProfileTab() {
     const reader = new FileReader();
     reader.onloadend = () => {
       setProfileAvatar(reader.result);
-      addToast("Avatar loaded. Save profile to apply changes.", "info");
+      addToast("Avatar loaded. Save profile to apply changes to database.", "info");
     };
     reader.readAsDataURL(file);
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     if (!profileName.trim() || !profileEmail.trim()) {
       addToast("Name and Email are required", "error");
       return;
     }
-    updateAdminProfile(profileName, profileEmail, profileAvatar);
-    addToast("Profile details updated successfully!", "success");
+    setProfileSaving(true);
+    try {
+      await settingsApi.updateProfile({
+        name: profileName.trim(),
+        email: profileEmail.trim(),
+        avatarUrl: profileAvatar,
+        phone: profilePhone.trim(),
+        location: profileLocation.trim(),
+        bio: profileBio.trim(),
+        designation: profileRole.trim(),
+      });
+      updateAdminProfile(profileName, profileEmail, profileAvatar);
+      addToast("Profile details securely saved in database!", "success");
+    } catch (err) {
+      addToast(err.message || "Failed to update profile", "error");
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const newDoc = {
-      id: `doc_${Date.now()}`,
-      name: file.name,
-      size: (file.size / 1024 / 1024).toFixed(1) + " MB",
-      date: "Just now",
-      tags: [selectedUploadTag],
-    };
-    setVaultDocs([newDoc, ...vaultDocs]);
-    addToast(`${file.name} securely added to Vault with tag [${selectedUploadTag}].`, "success");
+    setUploadingDoc(true);
+    try {
+      const res = await settingsApi.addVaultDoc({
+        name: file.name,
+        size: (file.size / 1024 / 1024).toFixed(1) + " MB",
+        tags: [selectedUploadTag],
+      });
+      if (res?.documents) {
+        setVaultDocs(res.documents);
+      } else if (res?.document) {
+        setVaultDocs((prev) => [res.document, ...prev]);
+      }
+      addToast(`${file.name} securely added to Vault with tag [${selectedUploadTag}].`, "success");
+    } catch (err) {
+      addToast(err.message || "Failed to save document into vault", "error");
+    } finally {
+      setUploadingDoc(false);
+    }
   };
 
-  const handleDeleteDoc = (id, name) => {
-    setVaultDocs(vaultDocs.filter((d) => d.id !== id));
-    addToast(`${name} removed from Vault.`, "warning");
+  const promptDeleteDoc = (id, name) => {
+    setDocToDelete({ id, name });
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteDoc = async () => {
+    if (!docToDelete) return;
+    try {
+      await settingsApi.deleteVaultDoc(docToDelete.id);
+      setVaultDocs((prev) => prev.filter((d) => d.id !== docToDelete.id));
+      addToast(`${docToDelete.name} removed from Vault.`, "info");
+    } catch (err) {
+      addToast(err.message || "Failed to remove document", "error");
+    } finally {
+      setDeleteModalOpen(false);
+      setDocToDelete(null);
+    }
   };
 
   const filteredVaultDocs = vaultDocs.filter((doc) => {
-    const matchesSearch = doc.name.toLowerCase().includes(vaultSearchTerm.toLowerCase()) || 
-                          (doc.tags && doc.tags.some(t => t.toLowerCase().includes(vaultSearchTerm.toLowerCase())));
+    const matchesSearch = doc.name.toLowerCase().includes(vaultSearchTerm.toLowerCase()) ||
+      (doc.tags && doc.tags.some(t => t.toLowerCase().includes(vaultSearchTerm.toLowerCase())));
     const matchesFilter = activeVaultFilter === "All" || (doc.tags && doc.tags.includes(activeVaultFilter));
     return matchesSearch && matchesFilter;
   });
+
+  if (profileLoading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300 }}>
+        <Loader2 size={32} className="spin" style={{ color: "var(--brand-500)" }} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -146,7 +201,7 @@ export default function ProfileTab() {
             }}
           >
             <User size={18} color="var(--brand-500)" />
-            Super Admin Profile
+            {profileRole || "Administrator"} Profile
           </div>
           <div
             style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}
@@ -206,11 +261,11 @@ export default function ProfileTab() {
                   >
                     {profileName
                       ? profileName
-                          .split(" ")
-                          .map((x) => x[0])
-                          .slice(0, 2)
-                          .join("")
-                          .toUpperCase()
+                        .split(" ")
+                        .map((x) => x[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase()
                       : "SA"}
                   </div>
                 )}
@@ -461,8 +516,16 @@ export default function ProfileTab() {
               type="submit"
               className="btn btn-primary"
               style={{ alignSelf: "flex-end", padding: "10px 24px" }}
+              disabled={profileSaving}
             >
-              Save Profile Changes
+              {profileSaving ? (
+                <>
+                  <Loader2 size={16} className="spin" style={{ marginRight: 8 }} />
+                  Saving to Database...
+                </>
+              ) : (
+                "Save Profile Changes"
+              )}
             </button>
           </form>
         </div>
@@ -547,15 +610,15 @@ export default function ProfileTab() {
                 cursor: "pointer",
               }}
             />
-            
+
             {/* Inline Tag selector before uploading */}
-            <div 
-              style={{ 
-                position: "relative", 
-                zIndex: 10, 
-                display: "flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
+            <div
+              style={{
+                position: "relative",
+                zIndex: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 gap: 8,
                 background: "var(--bg-card)",
                 padding: "6px 12px",
@@ -750,7 +813,7 @@ export default function ProfileTab() {
                         <span>•</span>
                         <span>Uploaded {doc.date}</span>
                       </div>
-                      
+
                       {/* Document tags display */}
                       <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
                         {doc.tags && doc.tags.map((tag) => (
@@ -759,15 +822,15 @@ export default function ProfileTab() {
                             style={{
                               fontSize: 9,
                               background: tag === "Legal" ? "rgba(239, 68, 68, 0.1)" :
-                                          tag === "Technical" ? "rgba(59, 130, 246, 0.1)" :
-                                          tag === "Identity" ? "rgba(16, 185, 129, 0.1)" :
-                                          tag === "Finance" ? "rgba(245, 158, 11, 0.1)" :
-                                          "rgba(156, 163, 175, 0.1)",
+                                tag === "Technical" ? "rgba(59, 130, 246, 0.1)" :
+                                  tag === "Identity" ? "rgba(16, 185, 129, 0.1)" :
+                                    tag === "Finance" ? "rgba(245, 158, 11, 0.1)" :
+                                      "rgba(156, 163, 175, 0.1)",
                               color: tag === "Legal" ? "var(--danger-500)" :
-                                     tag === "Technical" ? "var(--brand-600)" :
-                                     tag === "Identity" ? "#10b981" :
-                                     tag === "Finance" ? "#f59e0b" :
-                                     "var(--text-muted)",
+                                tag === "Technical" ? "var(--brand-600)" :
+                                  tag === "Identity" ? "#10b981" :
+                                    tag === "Finance" ? "#f59e0b" :
+                                      "var(--text-muted)",
                               padding: "1px 6px",
                               borderRadius: "4px",
                               fontWeight: 700,
@@ -804,7 +867,7 @@ export default function ProfileTab() {
                       className="btn btn-ghost btn-sm"
                       style={{ padding: 6 }}
                       title="Delete"
-                      onClick={() => handleDeleteDoc(doc.id, doc.name)}
+                      onClick={() => promptDeleteDoc(doc.id, doc.name)}
                     >
                       <Trash2 size={14} color="var(--danger-500)" />
                     </button>
@@ -813,6 +876,60 @@ export default function ProfileTab() {
               ))
             )}
           </div>
+        </div>
+      </div>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setDocToDelete(null);
+        }}
+        onConfirm={confirmDeleteDoc}
+        itemName={docToDelete?.name}
+      />
+    </div>
+  );
+}
+
+function ConfirmDeleteModal({ open, onClose, onConfirm, itemName }) {
+  if (!open) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.6)",
+        backdropFilter: "blur(4px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+      }}
+    >
+      <div
+        className="card"
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          padding: 24,
+          background: "var(--bg-card)",
+          borderRadius: "var(--radius-lg)",
+          boxShadow: "var(--shadow-xl)",
+        }}
+      >
+        <h3 style={{ margin: "0 0 8px 0", fontSize: "1.1rem" }}>Confirm Deletion</h3>
+        <p style={{ margin: "0 0 20px 0", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
+          Are you sure you want to delete <strong>{itemName || "this document"}</strong> from the Secure Vault? This action cannot be undone.
+        </p>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-danger btn-sm" onClick={onConfirm}>
+            Delete Document
+          </button>
         </div>
       </div>
     </div>

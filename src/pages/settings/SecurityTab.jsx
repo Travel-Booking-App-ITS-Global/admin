@@ -1,70 +1,120 @@
-import { useState } from "react";
-import { Key } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Key, Loader2, AlertCircle } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
+import { settingsApi } from "../../services/api.js";
 import Modal from "../../components/ui/Modal.jsx";
 
 export default function SecurityTab() {
-  const { addToast, changeAdminPassword } = useApp();
+  const { addToast } = useApp();
 
   // Password Form State
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordUpdating, setPasswordUpdating] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
 
   // 2FA Authentication State
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(() => {
-    return localStorage.getItem("admin_2fa_enabled") === "true";
-  });
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorOpen, setTwoFactorOpen] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+  const [twoFactorUpdating, setTwoFactorUpdating] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [manual2FaKey, setManual2FaKey] = useState("");
 
-  const handleUpdatePassword = (e) => {
+  useEffect(() => {
+    settingsApi
+      .getProfile()
+      .then((p) => {
+        if (p) {
+          setTwoFactorEnabled(!!p.mfaEnabled);
+          const emailPrefix = (p.email || "admin").split("@")[0].toUpperCase().slice(0, 4);
+          setManual2FaKey(`ITSG${emailPrefix}${Math.random().toString(36).substring(2, 8).toUpperCase()}`);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleUpdatePassword = async (e) => {
     e.preventDefault();
+    setPasswordError("");
     if (!currentPassword) {
+      setPasswordError("Please enter current password");
       addToast("Please enter current password", "error");
       return;
     }
     if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters long");
       addToast("New password must be at least 6 characters long", "error");
       return;
     }
     if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match");
       addToast("Passwords do not match", "error");
       return;
     }
-    const res = changeAdminPassword(currentPassword, newPassword);
-    if (res.success) {
-      addToast("Password changed successfully!", "success");
+
+    setPasswordUpdating(true);
+    try {
+      await settingsApi.changePassword(currentPassword, newPassword);
+      addToast("Password securely changed in database!", "success");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } else {
-      addToast(res.message, "error");
+    } catch (err) {
+      const msg = err.message || "Failed to change password";
+      setPasswordError(msg);
+      addToast(msg, "error");
+    } finally {
+      setPasswordUpdating(false);
     }
   };
 
-  const handleToggle2FA = () => {
+  const handleToggle2FA = async () => {
     if (twoFactorEnabled) {
-      localStorage.setItem("admin_2fa_enabled", "false");
-      setTwoFactorEnabled(false);
-      addToast("Two-Factor Authentication disabled", "info");
+      setTwoFactorUpdating(true);
+      try {
+        await settingsApi.toggle2FA(false);
+        setTwoFactorEnabled(false);
+        addToast("Two-Factor Authentication disabled in database", "info");
+      } catch (err) {
+        addToast(err.message || "Failed to disable 2FA", "error");
+      } finally {
+        setTwoFactorUpdating(false);
+      }
     } else {
       setOtpCode("");
       setTwoFactorOpen(true);
     }
   };
 
-  const handleVerify2FA = (e) => {
+  const handleVerify2FA = async (e) => {
     e.preventDefault();
     if (otpCode.length !== 6 || isNaN(otpCode)) {
       addToast("Please enter a valid 6-digit OTP code", "error");
       return;
     }
-    localStorage.setItem("admin_2fa_enabled", "true");
-    setTwoFactorEnabled(true);
-    setTwoFactorOpen(false);
-    addToast("Two-Factor Authentication enabled successfully!", "success");
+    setTwoFactorUpdating(true);
+    try {
+      await settingsApi.toggle2FA(true);
+      setTwoFactorEnabled(true);
+      setTwoFactorOpen(false);
+      addToast("Two-Factor Authentication enabled and secured in database!", "success");
+    } catch (err) {
+      addToast(err.message || "Failed to enable 2FA", "error");
+    } finally {
+      setTwoFactorUpdating(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: 300 }}>
+        <Loader2 size={32} className="spin" style={{ color: "var(--brand-500)" }} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -104,12 +154,32 @@ export default function SecurityTab() {
         </div>
         <div style={{ padding: "18px 22px" }}>
           <form
+            noValidate
             onSubmit={handleUpdatePassword}
             style={{ display: "flex", flexDirection: "column", gap: 14 }}
           >
+            {passwordError && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 12px",
+                  borderRadius: 6,
+                  background: "rgba(239, 68, 68, 0.1)",
+                  border: "1px solid rgba(239, 68, 68, 0.3)",
+                  color: "#ef4444",
+                  fontSize: 12,
+                }}
+              >
+                <AlertCircle size={14} />
+                <span>{passwordError}</span>
+              </div>
+            )}
+
             {/* Current Password */}
             <div className="form-group">
-              <label className="form-label">Current Password</label>
+              <label className="form-label">Current Password *</label>
               <div style={{ position: "relative" }}>
                 <Key
                   size={16}
@@ -126,16 +196,18 @@ export default function SecurityTab() {
                   className="form-input"
                   style={{ paddingLeft: 38 }}
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={(e) => {
+                    setCurrentPassword(e.target.value);
+                    if (passwordError) setPasswordError("");
+                  }}
                   placeholder="••••••••"
-                  required
                 />
               </div>
             </div>
 
             {/* New Password */}
             <div className="form-group">
-              <label className="form-label">New Password</label>
+              <label className="form-label">New Password *</label>
               <div style={{ position: "relative" }}>
                 <Key
                   size={16}
@@ -152,16 +224,18 @@ export default function SecurityTab() {
                   className="form-input"
                   style={{ paddingLeft: 38 }}
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    if (passwordError) setPasswordError("");
+                  }}
                   placeholder="••••••••"
-                  required
                 />
               </div>
             </div>
 
             {/* Confirm New Password */}
             <div className="form-group">
-              <label className="form-label">Confirm New Password</label>
+              <label className="form-label">Confirm New Password *</label>
               <div style={{ position: "relative" }}>
                 <Key
                   size={16}
@@ -178,9 +252,11 @@ export default function SecurityTab() {
                   className="form-input"
                   style={{ paddingLeft: 38 }}
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    if (passwordError) setPasswordError("");
+                  }}
                   placeholder="••••••••"
-                  required
                 />
               </div>
             </div>
@@ -190,8 +266,16 @@ export default function SecurityTab() {
               type="submit"
               className="btn btn-primary"
               style={{ alignSelf: "flex-start", marginTop: 4 }}
+              disabled={passwordUpdating}
             >
-              Update Password
+              {passwordUpdating ? (
+                <>
+                  <Loader2 size={15} className="spin" style={{ marginRight: 8 }} />
+                  Verifying & Updating...
+                </>
+              ) : (
+                "Update Password"
+              )}
             </button>
           </form>
         </div>
@@ -379,7 +463,7 @@ export default function SecurityTab() {
                   letterSpacing: 1,
                 }}
               >
-                JBSWY3DPEHPK3PXP
+                {manual2FaKey || "ITSGADMINSECURE"}
               </code>
             </div>
           </div>

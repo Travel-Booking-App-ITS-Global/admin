@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { Eye, EyeOff, Trash2, RefreshCw, Pencil } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Eye, EyeOff, Trash2, RefreshCw, Pencil, Loader2, Copy } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { ConfirmDeleteModal } from "../../components/ui/index.jsx";
+import { settingsApi } from "../../services/api.js";
 
 const initialApiKeys = [
   {
@@ -48,7 +50,9 @@ const initialApiKeys = [
 
 export default function ApiKeysTab() {
   const { addToast } = useApp();
-  const [apiKeys, setApiKeys] = useState(initialApiKeys);
+  const [apiKeys, setApiKeys] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Add Modal States
   const [addKeyOpen, setAddKeyOpen] = useState(false);
@@ -65,13 +69,50 @@ export default function ApiKeysTab() {
   const [editKeyValue, setEditKeyValue] = useState("");
   const [editKeyTags, setEditKeyTags] = useState("");
 
+  const [keyToDelete, setKeyToDelete] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+
   // Search/Filter states
   const [keysSearchTerm, setKeysSearchTerm] = useState("");
   const [activeKeyFilter, setActiveKeyFilter] = useState("All");
   const keysFilterTags = ["All", "Payment", "Maps", "Auth", "Flights", "Production", "Development"];
 
+  const filteredApiKeys = apiKeys.filter((key) => {
+    const matchesSearch =
+      (key.name || "").toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
+      (key.provider || "").toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
+      (key.tags && key.tags.some((t) => t.toLowerCase().includes(keysSearchTerm.toLowerCase())));
+    const matchesFilter =
+      activeKeyFilter === "All" || (key.tags && key.tags.includes(activeKeyFilter));
+    return matchesSearch && matchesFilter;
+  });
 
-  const handleAddKey = (e) => {
+  const loadKeys = async () => {
+    try {
+      const data = await settingsApi.getKeys();
+      if (Array.isArray(data)) {
+        setApiKeys(
+          data.map((k) => ({
+            ...k,
+            id: k.keyCode || k.id,
+            rawId: k.id,
+            value: k.keySecret || k.value || "",
+            hidden: true,
+          }))
+        );
+      }
+    } catch (err) {
+      console.warn("Failed to load API keys:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadKeys();
+  }, []);
+
+  const handleAddKey = async (e) => {
     e.preventDefault();
     if (!newKeyName.trim() || !newKeyValue.trim()) {
       addToast("Please fill out Key Name and Key Value", "error");
@@ -80,24 +121,31 @@ export default function ApiKeysTab() {
     const parsedTags = newKeyTags
       ? newKeyTags.split(",").map((t) => t.trim()).filter(Boolean)
       : [];
-    const added = {
-      id: `KEY${Date.now()}`,
-      name: newKeyName,
-      provider: newKeyProvider,
-      value: newKeyValue,
-      hidden: true,
-      tags: parsedTags,
-    };
-    setApiKeys((prev) => [...prev, added]);
-    addToast(`${newKeyName} added successfully!`, "success");
-    setNewKeyName("");
-    setNewKeyValue("");
-    setNewKeyTags("");
-    setAddKeyOpen(false);
+
+    setActionLoading(true);
+    try {
+      await settingsApi.createKey({
+        name: newKeyName.trim(),
+        provider: newKeyProvider.trim(),
+        value: newKeyValue.trim(),
+        tags: parsedTags,
+        status: "active",
+      });
+      addToast(`${newKeyName} added and secured in database!`, "success");
+      setNewKeyName("");
+      setNewKeyValue("");
+      setNewKeyTags("");
+      setAddKeyOpen(false);
+      await loadKeys();
+    } catch (err) {
+      addToast(err.message || "Failed to create API key", "error");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleEditClick = (key) => {
-    setEditingKeyId(key.id);
+    setEditingKeyId(key.rawId || key.id);
     setEditKeyName(key.name);
     setEditKeyProvider(key.provider);
     setEditKeyValue(key.value);
@@ -105,7 +153,7 @@ export default function ApiKeysTab() {
     setEditKeyOpen(true);
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = async (e) => {
     e.preventDefault();
     if (!editKeyName.trim() || !editKeyValue.trim()) {
       addToast("Please fill out Key Name and Key Value", "error");
@@ -114,33 +162,26 @@ export default function ApiKeysTab() {
     const parsedTags = editKeyTags
       ? editKeyTags.split(",").map((t) => t.trim()).filter(Boolean)
       : [];
-    setApiKeys((prev) =>
-      prev.map((k) =>
-        k.id === editingKeyId
-          ? {
-              ...k,
-              name: editKeyName,
-              provider: editKeyProvider,
-              value: editKeyValue,
-              tags: parsedTags,
-            }
-          : k
-      )
-    );
-    addToast(`${editKeyName} updated successfully!`, "success");
-    setEditKeyOpen(false);
-    setEditingKeyId(null);
-    setEditKeyTags("");
+
+    setActionLoading(true);
+    try {
+      await settingsApi.updateKey(editingKeyId, {
+        name: editKeyName.trim(),
+        provider: editKeyProvider.trim(),
+        value: editKeyValue.trim(),
+        tags: parsedTags,
+      });
+      addToast(`${editKeyName} updated successfully in database!`, "success");
+      setEditKeyOpen(false);
+      setEditingKeyId(null);
+      setEditKeyTags("");
+      await loadKeys();
+    } catch (err) {
+      addToast(err.message || "Failed to update API key", "error");
+    } finally {
+      setActionLoading(false);
+    }
   };
-
-  const filteredApiKeys = apiKeys.filter((key) => {
-    const matchesSearch = key.name.toLowerCase().includes(keysSearchTerm.toLowerCase()) || 
-                          key.provider.toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
-                          (key.tags && key.tags.some(t => t.toLowerCase().includes(keysSearchTerm.toLowerCase())));
-    const matchesFilter = activeKeyFilter === "All" || (key.tags && key.tags.includes(activeKeyFilter));
-    return matchesSearch && matchesFilter;
-  });
-
 
   const toggleKeyVisibility = (id) => {
     setApiKeys((prev) =>
@@ -148,31 +189,32 @@ export default function ApiKeysTab() {
     );
   };
 
-  const handleRotateKey = (id, name) => {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let newGeneratedVal = "";
-    if (name.toLowerCase().includes("stripe")) {
-      newGeneratedVal = "sk_live_";
-    } else if (name.toLowerCase().includes("razorpay")) {
-      newGeneratedVal = "rzp_live_";
-    } else if (name.toLowerCase().includes("google")) {
-      newGeneratedVal = "AIzaSy";
-    } else {
-      newGeneratedVal = "key_";
+  const handleRotateKey = async (id, name) => {
+    try {
+      const res = await settingsApi.regenerateKey(id);
+      addToast(`${name} regenerated securely with fresh cryptographic secret!`, "success");
+      await loadKeys();
+    } catch (err) {
+      addToast(err.message || "Failed to rotate API key", "error");
     }
-    for (let i = 0; i < 20; i++) {
-      newGeneratedVal += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    setApiKeys((prev) =>
-      prev.map((k) => (k.id === id ? { ...k, value: newGeneratedVal } : k))
-    );
-    addToast(`${name} rotated successfully!`, "success");
   };
 
-  const handleDeleteKey = (id, name) => {
-    setApiKeys((prev) => prev.filter((k) => k.id !== id));
-    addToast(`${name} deleted!`, "error");
+  const promptDeleteKey = (id, name) => {
+    setKeyToDelete({ id, name });
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteKey = async () => {
+    if (!keyToDelete) return;
+    try {
+      await settingsApi.deleteKey(keyToDelete.id);
+      setApiKeys((prev) => prev.filter((k) => k.id !== keyToDelete.id && k.rawId !== keyToDelete.id));
+      addToast(`${keyToDelete.name} revoked and deleted from database!`, "error");
+      setDeleteModalOpen(false);
+      setKeyToDelete(null);
+    } catch (err) {
+      addToast(err.message || "Failed to delete API key", "error");
+    }
   };
 
   return (
@@ -278,150 +320,145 @@ export default function ApiKeysTab() {
             {activeKeyFilter !== "All" && <span>Filtered by: {activeKeyFilter}</span>}
           </div>
 
-          {filteredApiKeys.map((key) => (
-            <div
-              key={key.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "14px 16px",
-                background: "var(--bg-hover)",
-                borderRadius: "var(--radius-md)",
-                border: "1px solid var(--border-default)",
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>
-                    {key.name}
-                  </span>
-                  <span
+          {loading ? (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, padding: 50, color: "var(--text-muted)" }}>
+              <Loader2 size={24} className="spin" style={{ color: "var(--brand-500)" }} />
+              <span>Loading API keys from secure database...</span>
+            </div>
+          ) : filteredApiKeys.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 50, color: "var(--text-muted)", fontSize: 13 }}>
+              No API keys found in credentials vault.
+            </div>
+          ) : (
+            filteredApiKeys.map((key) => (
+              <div
+                key={key.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 16px",
+                  background: "var(--bg-hover)",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border-default)",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
+                  <div
                     style={{
-                      fontSize: 10,
-                      background: "var(--brand-50)",
-                      color: "var(--brand-700)",
-                      padding: "1px 6px",
-                      borderRadius: "var(--radius-sm)",
-                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      flexWrap: "wrap",
                     }}
                   >
-                    {key.provider}
-                  </span>
-                  
-                  {/* Render Tags */}
-                  {key.tags && key.tags.map((tag) => (
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>
+                      {key.name}
+                    </span>
                     <span
-                      key={tag}
                       style={{
-                        fontSize: 9,
-                        background: "rgba(var(--brand-500-rgb, 59, 130, 246), 0.08)",
-                        color: "var(--brand-500)",
+                        fontSize: 10,
+                        background: "var(--brand-50)",
+                        color: "var(--brand-700)",
                         padding: "1px 6px",
-                        borderRadius: "4px",
-                        fontWeight: 700,
-                        border: "1px solid rgba(var(--brand-500-rgb, 59, 130, 246), 0.15)",
+                        borderRadius: "var(--radius-sm)",
+                        fontWeight: 600,
                       }}
                     >
-                      {tag}
+                      {key.provider}
                     </span>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontFamily: "monospace",
-                    color: "var(--text-muted)",
-                    marginTop: 4,
-                    wordBreak: "break-all",
-                  }}
-                >
-                  {key.hidden ? "•".repeat(24) : key.value}
-                </div>
-              </div>
 
-              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  style={{
-                    padding: "4px 8px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  onClick={() => toggleKeyVisibility(key.id)}
-                  title={key.hidden ? "Show API Key" : "Hide API Key"}
-                >
-                  {key.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    navigator.clipboard.writeText(key.value);
-                    addToast(`${key.name} copied to clipboard!`, "success");
-                  }}
-                >
-                  Copy
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                  onClick={() => handleEditClick(key)}
-                >
-                  <Pencil size={12} />
-                  Edit
-                </button>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  style={{
-                    color: "var(--warning-600)",
-                    borderColor: "var(--warning-500)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                  onClick={() => handleRotateKey(key.id, key.name)}
-                >
-                  <RefreshCw size={12} />
-                  Rotate
-                </button>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ color: "var(--danger-500)", padding: 4 }}
-                  onClick={() => handleDeleteKey(key.id, key.name)}
-                  title="Delete Key"
-                >
-                  <Trash2 size={15} />
-                </button>
+                    {/* Render Tags */}
+                    {key.tags && key.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        style={{
+                          fontSize: 9,
+                          background: "rgba(var(--brand-500-rgb, 59, 130, 246), 0.08)",
+                          color: "var(--brand-500)",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          fontWeight: 700,
+                          border: "1px solid rgba(var(--brand-500-rgb, 59, 130, 246), 0.15)",
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      fontFamily: "monospace",
+                      color: "var(--text-muted)",
+                      marginTop: 4,
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {key.hidden ? "•".repeat(24) : key.value}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      padding: "4px 8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onClick={() => toggleKeyVisibility(key.id)}
+                    title={key.hidden ? "Show API Key" : "Hide API Key"}
+                  >
+                    {key.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(key.value);
+                      addToast(`${key.name} copied to clipboard!`, "success");
+                    }}
+                  >
+                    Copy
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                    onClick={() => handleEditClick(key)}
+                  >
+                    <Pencil size={12} />
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    style={{
+                      color: "var(--warning-600)",
+                      borderColor: "var(--warning-500)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                    onClick={() => handleRotateKey(key.id, key.name)}
+                  >
+                    <RefreshCw size={12} />
+                    Rotate
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: "var(--danger-500)", padding: 4 }}
+                    onClick={() => promptDeleteKey(key.id, key.name)}
+                    title="Delete Key"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-          {filteredApiKeys.length === 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "24px 0",
-                color: "var(--text-muted)",
-                fontSize: 13,
-                border: "1px dashed var(--border-default)",
-                borderRadius: "var(--radius-md)",
-                background: "var(--bg-hover)",
-              }}
-            >
-              No API Keys found matching the search/filter criteria.
-            </div>
-          )}
+            )))}
         </div>
       </div>
 
@@ -504,8 +541,8 @@ export default function ApiKeysTab() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Save API Key
+            <button type="submit" className="btn btn-primary" disabled={actionLoading}>
+              {actionLoading ? "Saving Key..." : "Save API Key"}
             </button>
           </div>
         </form>
@@ -590,12 +627,22 @@ export default function ApiKeysTab() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Update API Key
+            <button type="submit" className="btn btn-primary" disabled={actionLoading}>
+              {actionLoading ? "Updating Key..." : "Update API Key"}
             </button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setKeyToDelete(null);
+        }}
+        onConfirm={confirmDeleteKey}
+        itemName={keyToDelete?.name}
+      />
     </div>
   );
 }

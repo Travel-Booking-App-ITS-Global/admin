@@ -1,0 +1,1231 @@
+/**
+ * ITS Global Travel Enterprise Admin API & Authentication Client
+ * Features:
+ * - JWT Access & Refresh Token Lifecycle Management
+ * - Automatic Silent Token Refresh with Mutex / In-flight Promise Sharing
+ * - Resilient Error Handling & Normalization
+ * - Multi-tab Session Synchronization via Custom Events
+ */
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+
+export const TOKEN_KEY = 'its_admin_access_token';
+export const REFRESH_TOKEN_KEY = 'its_admin_refresh_token';
+export const USER_KEY = 'its_admin_user_data';
+
+// Concurrency queue for seamless token refresh
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
+
+function onRefreshed(newAccessToken) {
+  refreshSubscribers.forEach((cb) => cb(newAccessToken));
+  refreshSubscribers = [];
+}
+
+/**
+ * Decode JWT token safely without external dependencies
+ */
+export function decodeJwt(token) {
+  try {
+    if (!token || typeof token !== 'string') return null;
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if a token is expired
+ */
+export function isTokenExpired(token, bufferSeconds = 30) {
+  const decoded = decodeJwt(token);
+  if (!decoded || !decoded.exp) return true;
+  return Date.now() >= (decoded.exp - bufferSeconds) * 1000;
+}
+
+/**
+ * Core HTTP Request Wrapper with Auto Authorization & Token Refresh
+ */
+export async function apiRequest(endpoint, options = {}, isRetry = false) {
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+  let token = localStorage.getItem(TOKEN_KEY);
+  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+  // If token is about to expire and we have a refresh token, proactively refresh
+  if (token && refreshToken && isTokenExpired(token) && !endpoint.includes('/auth/')) {
+    try {
+      token = await authService.refreshAccessToken();
+    } catch {
+      // Proceed with existing token; if it fails, 401 handler will catch it
+    }
+  }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
+
+    // Handle 401 Unauthorized with Automatic Token Refresh
+    if (response.status === 401 && !isRetry && !endpoint.includes('/auth/login')) {
+      if (refreshToken) {
+        if (!isRefreshing) {
+          isRefreshing = true;
+          try {
+            const newAccessToken = await authService.refreshAccessToken();
+            isRefreshing = false;
+            onRefreshed(newAccessToken);
+            return apiRequest(endpoint, options, true);
+          } catch (refreshErr) {
+            isRefreshing = false;
+            refreshSubscribers = [];
+            authService.logout();
+            throw refreshErr;
+          }
+        } else {
+          // Wait in queue until current refresh finishes
+          return new Promise((resolve, reject) => {
+            subscribeTokenRefresh((newToken) => {
+              if (newToken) {
+                resolve(apiRequest(endpoint, options, true));
+              } else {
+                reject(new Error('Session expired. Please log in again.'));
+              }
+            });
+          });
+        }
+      } else {
+        authService.logout();
+      }
+    }
+
+    if (!response.ok) {
+      let errorMessage = 'An unexpected error occurred.';
+      if (typeof data === 'object' && data !== null) {
+        if (Array.isArray(data.message)) {
+          errorMessage = data.message.join(', ');
+        } else if (data.message) {
+          errorMessage = data.message;
+        } else if (data.error) {
+          errorMessage = data.error;
+        }
+      } else if (typeof data === 'string' && data.length > 0) {
+        errorMessage = data;
+      }
+
+      const error = new Error(errorMessage);
+      error.status = response.status;
+      error.data = data;
+      throw error;
+    }
+
+    return data;
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+      const netErr = new Error('Cannot connect to backend server. Please verify the server is running on ' + API_BASE_URL);
+      netErr.status = 0;
+      throw netErr;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Enterprise Admin Authentication Service
+ */
+export const authService = {
+  /**
+   * Login Admin with email & password
+   */
+  async login(email, password) {
+    const payload = {
+      email: email.trim().toLowerCase(),
+      password,
+    };
+
+    const res = await apiRequest('/admin/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    const resultData = res?.data || res;
+    const { tokens, user } = resultData;
+
+    if (tokens?.accessToken) {
+      localStorage.setItem(TOKEN_KEY, tokens.accessToken);
+    }
+    if (tokens?.refreshToken) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+    }
+    if (user) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      localStorage.setItem('its_admin_name', user.name || 'Admin');
+      localStorage.setItem('its_admin_email', user.email || email);
+      if (user.avatar) localStorage.setItem('its_admin_avatar', user.avatar);
+      if (user.role) localStorage.setItem('its_admin_role', user.role);
+    }
+
+    window.dispatchEvent(new CustomEvent('auth:login', { detail: user }));
+    return resultData;
+  },
+
+  /**
+   * Silent Access Token Refresh
+   */
+  async refreshAccessToken() {
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    const res = await fetch(`${API_BASE_URL}/admin/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (!res.ok) {
+      this.logout();
+      throw new Error('Refresh token invalid or expired');
+    }
+
+    const json = await res.json();
+    const data = json?.data || json;
+    const newAccessToken = data?.tokens?.accessToken || data?.accessToken;
+    const newRefreshToken = data?.tokens?.refreshToken || data?.refreshToken;
+
+    if (newAccessToken) {
+      localStorage.setItem(TOKEN_KEY, newAccessToken);
+    }
+    if (newRefreshToken) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
+    }
+
+    return newAccessToken;
+  },
+
+  /**
+   * Send Forgot Password email link
+   */
+  async forgotPassword(email) {
+    return apiRequest('/admin/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+  },
+
+  /**
+   * Reset Admin Password with token
+   */
+  async resetPassword(email, token, newPassword) {
+    return apiRequest('/admin/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        token,
+        newPassword,
+      }),
+    });
+  },
+
+  /**
+   * Universal Logout
+   */
+  logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    window.dispatchEvent(new CustomEvent('auth:logout'));
+  },
+
+  /**
+   * Get Current Access Token
+   */
+  getToken() {
+    return localStorage.getItem(TOKEN_KEY);
+  },
+
+  /**
+   * Get Current Refresh Token
+   */
+  getRefreshToken() {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  },
+
+  /**
+   * Get Current Stored Admin User
+   */
+  getUser() {
+    try {
+      const user = localStorage.getItem(USER_KEY);
+      return user ? JSON.parse(user) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Check if User is Authenticated & Token Not Expired
+   */
+  isAuthenticated() {
+    const token = localStorage.getItem(TOKEN_KEY);
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (!token && !refreshToken) return false;
+    if (token && !isTokenExpired(token)) return true;
+    return Boolean(refreshToken);
+  },
+};
+
+/**
+ * Enterprise Admin Users Management Service
+ */
+export const usersApi = {
+  /**
+   * Get User KPI counts (total, active, inactive, blocked)
+   */
+  async getStats() {
+    const res = await apiRequest('/admin/users/stats');
+    return res?.data || res;
+  },
+
+  /**
+   * Get list of users with search, status filter, and pagination
+   */
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.sortBy) query.append('sortBy', params.sortBy);
+    if (params.sortOrder) query.append('sortOrder', params.sortOrder);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest(`/admin/users${queryString}`);
+    return res?.data || res;
+  },
+
+  /**
+   * Get complete user profile with booking records
+   */
+  async getById(id) {
+    const res = await apiRequest(`/admin/users/${id}`);
+    return res?.data || res;
+  },
+
+  /**
+   * Create a new customer / user
+   */
+  async create(userData) {
+    const res = await apiRequest('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Update existing user details
+   */
+  async update(id, userData) {
+    const res = await apiRequest(`/admin/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(userData),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Toggle user active/blocked status
+   */
+  async toggleStatus(id, status) {
+    const res = await apiRequest(`/admin/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Delete user account (soft delete)
+   */
+  async delete(id) {
+    const res = await apiRequest(`/admin/users/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+/**
+ * Enterprise Admin Drivers Management Service
+ */
+export const driversApi = {
+  /**
+   * Get Drivers KPI counts (total, active, busy, inactive, verified, pending)
+   */
+  async getStats() {
+    const res = await apiRequest('/admin/cabs/drivers/stats');
+    return res?.data || res;
+  },
+
+  /**
+   * Get list of drivers with search, status filter, and pagination
+   */
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.verification && params.verification !== 'all') query.append('verification', params.verification);
+    if (params.sortBy) query.append('sortBy', params.sortBy);
+    if (params.sortOrder) query.append('sortOrder', params.sortOrder);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest(`/admin/cabs/drivers${queryString}`);
+    return res?.data || res;
+  },
+
+  /**
+   * Get complete driver profile
+   */
+  async getById(id) {
+    const res = await apiRequest(`/admin/cabs/drivers/${id}`);
+    return res?.data || res;
+  },
+
+  /**
+   * Create a new driver
+   */
+  async create(driverData) {
+    const res = await apiRequest('/admin/cabs/drivers', {
+      method: 'POST',
+      body: JSON.stringify(driverData),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Update existing driver details
+   */
+  async update(id, driverData) {
+    const res = await apiRequest(`/admin/cabs/drivers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(driverData),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Toggle driver active/blocked status
+   */
+  async toggleStatus(id, status) {
+    const res = await apiRequest(`/admin/cabs/drivers/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  /**
+   * Delete driver account (soft delete)
+   */
+  async delete(id) {
+    const res = await apiRequest(`/admin/cabs/drivers/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+/**
+ * Enterprise Admin Staff Management Service
+ */
+export const staffApi = {
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest(`/admin/staff${queryString}`);
+    return res?.data || res;
+  },
+
+  async create(staffData) {
+    const res = await apiRequest('/admin/staff', {
+      method: 'POST',
+      body: JSON.stringify(staffData),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, staffData) {
+    const res = await apiRequest(`/admin/staff/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(staffData),
+    });
+    return res?.data || res;
+  }
+};
+
+/**
+ * Enterprise Admin Roles Service
+ */
+export const rolesApi = {
+  async getAll() {
+    const res = await apiRequest('/admin/roles');
+    return res?.data || res;
+  },
+
+  async updatePermissions(id, permissions) {
+    const res = await apiRequest(`/admin/roles/${id}/permissions`, {
+      method: 'PATCH',
+      body: JSON.stringify({ permissions }),
+    });
+    return res?.data || res;
+  }
+};
+
+/**
+ * Enterprise Admin Audit Logs Service
+ */
+export const auditApi = {
+  async getLogs(limit = 50) {
+    const res = await apiRequest(`/admin/audit/logs?limit=${limit}`);
+    return res?.data || res;
+  }
+};
+
+/**
+ * Enterprise Admin Fleet Vehicles Registry Service
+ */
+export const vehiclesApi = {
+  async getStats() {
+    const res = await apiRequest('/admin/cabs/vehicles/stats');
+    return res?.data || res;
+  },
+
+  async getAll(params = {}) {
+    const query = new URLSearchParams();
+    if (params.page) query.append('page', params.page);
+    if (params.limit) query.append('limit', params.limit);
+    if (params.search) query.append('search', params.search);
+    if (params.status && params.status !== 'all') query.append('status', params.status);
+    if (params.permit && params.permit !== 'all') query.append('permit', params.permit);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await apiRequest(`/admin/cabs/vehicles${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/cabs/vehicles/${id}`);
+    return res?.data || res;
+  },
+
+  async create(vehicleData) {
+    const res = await apiRequest('/admin/cabs/vehicles', {
+      method: 'POST',
+      body: JSON.stringify(vehicleData),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, vehicleData) {
+    const res = await apiRequest(`/admin/cabs/vehicles/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(vehicleData),
+    });
+    return res?.data || res;
+  },
+
+  async toggleStatus(id, status) {
+    const res = await apiRequest(`/admin/cabs/vehicles/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/cabs/vehicles/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+export const settingsApi = {
+  // Profile & Vault
+  async getProfile() {
+    const res = await apiRequest('/admin/settings/profile');
+    return res?.data || res;
+  },
+  async updateProfile(data) {
+    const res = await apiRequest('/admin/settings/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async addVaultDoc(data) {
+    const res = await apiRequest('/admin/settings/profile/vault', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async deleteVaultDoc(docId) {
+    const res = await apiRequest(`/admin/settings/profile/vault/${docId}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  // Security & 2FA
+  async changePassword(currentPassword, newPassword) {
+    const res = await apiRequest('/admin/settings/security/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    return res?.data || res;
+  },
+  async toggle2FA(enabled) {
+    const res = await apiRequest('/admin/settings/security/toggle-2fa', {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    });
+    return res?.data || res;
+  },
+
+  // Connected APIs
+  async getApis() {
+    const res = await apiRequest('/admin/settings/apis');
+    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+  },
+  async createApi(data) {
+    const res = await apiRequest('/admin/settings/apis', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async updateApi(id, data) {
+    const res = await apiRequest(`/admin/settings/apis/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async deleteApi(id) {
+    const res = await apiRequest(`/admin/settings/apis/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+  async pingApi(id) {
+    const res = await apiRequest(`/admin/settings/apis/${id}/ping`, {
+      method: 'POST',
+    });
+    return res?.data || res;
+  },
+
+  // API Keys
+  async getKeys() {
+    const res = await apiRequest('/admin/settings/keys');
+    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+  },
+  async createKey(data) {
+    const res = await apiRequest('/admin/settings/keys', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async updateKey(id, data) {
+    const res = await apiRequest(`/admin/settings/keys/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async deleteKey(id) {
+    const res = await apiRequest(`/admin/settings/keys/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+  async regenerateKey(id) {
+    const res = await apiRequest(`/admin/settings/keys/${id}/regenerate`, {
+      method: 'POST',
+    });
+    return res?.data || res;
+  },
+
+  // System Settings
+  async getSystemSettings(group) {
+    const query = group ? `?group=${group}` : '';
+    const res = await apiRequest(`/admin/settings/system${query}`);
+    return res?.data || res;
+  },
+  async updateSystemSetting(data) {
+    const res = await apiRequest('/admin/settings/system', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async bulkUpdateSystemSettings(settings) {
+    const res = await apiRequest('/admin/settings/system/bulk', {
+      method: 'PATCH',
+      body: JSON.stringify({ settings }),
+    });
+    return res?.data || res;
+  },
+};
+
+export const contactsApi = {
+  async getAll(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.type && params.type !== 'All') q.append('type', params.type);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/contacts${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/contacts/${id}`);
+    return res?.data || res;
+  },
+
+  async create(data) {
+    const res = await apiRequest('/admin/contacts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, data) {
+    const res = await apiRequest(`/admin/contacts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/contacts/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+export const onboardingApi = {
+  async getAll() {
+    const res = await apiRequest('/admin/cms/onboarding');
+    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+  },
+  async create(data) {
+    const res = await apiRequest('/admin/cms/onboarding', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async update(id, data) {
+    const res = await apiRequest(`/admin/cms/onboarding/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async toggleStatus(id) {
+    const res = await apiRequest(`/admin/cms/onboarding/${id}/toggle-status`, {
+      method: 'PATCH',
+    });
+    return res?.data || res;
+  },
+  async reorder(slides) {
+    const res = await apiRequest('/admin/cms/onboarding/reorder', {
+      method: 'PATCH',
+      body: JSON.stringify({ slides }),
+    });
+    return res?.data || res;
+  },
+  async delete(id) {
+    const res = await apiRequest(`/admin/cms/onboarding/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+  async getPublicSlides() {
+    const res = await apiRequest('/auth/onboarding');
+    return Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+  },
+};
+
+export const uploadApi = {
+  async uploadImage(file, folder = 'onboarding') {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', folder);
+
+    const token = localStorage.getItem(TOKEN_KEY);
+    const url = `${API_BASE_URL}/admin/upload/image`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formData,
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Image upload failed');
+    }
+    return data?.data || data;
+  },
+
+  async uploadBase64(base64Data, folder = 'onboarding') {
+    const res = await apiRequest('/admin/upload/base64', {
+      method: 'POST',
+      body: JSON.stringify({ image: base64Data, folder }),
+    });
+    return res?.data || res;
+  },
+};
+
+
+export const cmsApi = {
+  async getFaqs() {
+    const res = await apiRequest('/admin/cms/faqs');
+    return res?.data || res;
+  },
+  async getPolicies() {
+    const res = await apiRequest('/admin/cms/policies');
+    return res?.data || res;
+  },
+  async createFaq(data) {
+    const res = await apiRequest('/admin/cms/faqs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async updateFaq(id, data) {
+    const res = await apiRequest(`/admin/cms/faqs/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  async deleteFaq(id) {
+    const res = await apiRequest(`/admin/cms/faqs/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+  async updatePolicy(id, data) {
+    const res = await apiRequest(`/admin/cms/policies/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+  // Onboarding Slides aliases
+  getOnboardingSlides: onboardingApi.getAll,
+  createOnboardingSlide: onboardingApi.create,
+  updateOnboardingSlide: onboardingApi.update,
+  toggleOnboardingSlideStatus: onboardingApi.toggleStatus,
+  reorderOnboardingSlides: onboardingApi.reorder,
+  deleteOnboardingSlide: onboardingApi.delete,
+};
+
+export const hotelsApi = {
+  async getAllAdmin(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.city && params.city !== 'All') q.append('city', params.city);
+    if (params.propertyType && params.propertyType !== 'All') q.append('propertyType', params.propertyType);
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortOrder) q.append('sortOrder', params.sortOrder);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/hotels${queryString}`);
+    return res?.data || res;
+  },
+
+  async getByIdAdmin(id) {
+    const res = await apiRequest(`/admin/hotels/${id}`);
+    return res?.data || res;
+  },
+
+  async createAdmin(data) {
+    const res = await apiRequest('/admin/hotels', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateAdmin(id, data) {
+    const res = await apiRequest(`/admin/hotels/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteAdmin(id) {
+    const res = await apiRequest(`/admin/hotels/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  async getPublicSearch(params = {}) {
+    const q = new URLSearchParams();
+    if (params.city) q.append('city', params.city);
+    if (params.propertyType) q.append('propertyType', params.propertyType);
+    if (params.page) q.append('page', params.page);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/hotels/search${queryString}`);
+    return res?.data || res;
+  },
+
+  async getPublicDetails(id) {
+    const res = await apiRequest(`/hotels/${id}`);
+    return res?.data || res;
+  },
+};
+
+export const destinationsApi = {
+  async getStats() {
+    const res = await apiRequest('/admin/destinations/stats');
+    return res?.data || res;
+  },
+
+  async getAll(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.country && params.country !== 'All') q.append('country', params.country);
+    if (params.status && params.status !== 'All') q.append('status', params.status);
+    if (params.badge && params.badge !== 'All') q.append('badge', params.badge);
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortOrder) q.append('sortOrder', params.sortOrder);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/destinations${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/destinations/${id}`);
+    return res?.data || res;
+  },
+
+  async create(data) {
+    const res = await apiRequest('/admin/destinations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, data) {
+    const res = await apiRequest(`/admin/destinations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/destinations/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  async createAttraction(destId, data) {
+    const res = await apiRequest(`/admin/destinations/${destId}/attractions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateAttraction(destId, attrId, data) {
+    const res = await apiRequest(`/admin/destinations/attractions/${attrId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteAttraction(destId, attrId) {
+    const res = await apiRequest(`/admin/destinations/attractions/${attrId}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  // Public simulator / client endpoints
+  async getFeatured() {
+    const res = await apiRequest('/destinations/featured');
+    return res?.data || res;
+  },
+
+  async getPublicList(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.country && params.country !== 'All') q.append('country', params.country);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/destinations${queryString}`);
+    return res?.data || res;
+  },
+
+  async getPublicDetails(id) {
+    const res = await apiRequest(`/destinations/${id}`);
+    return res?.data || res;
+  },
+
+  async getPublicAttraction(id) {
+    const res = await apiRequest(`/destinations/attractions/${id}`);
+    return res?.data || res;
+  },
+};
+
+export const packagesApi = {
+  async getStats() {
+    const res = await apiRequest('/admin/packages/stats');
+    return res?.data || res;
+  },
+
+  async getAll(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.destination && params.destination !== 'All') q.append('destination', params.destination);
+    if (params.travelType && params.travelType !== 'All') q.append('travelType', params.travelType);
+    if (params.status && params.status !== 'All') q.append('status', params.status);
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortOrder) q.append('sortOrder', params.sortOrder);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/packages${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/packages/${id}`);
+    return res?.data || res;
+  },
+
+  async create(data) {
+    const res = await apiRequest('/admin/packages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, data) {
+    const res = await apiRequest(`/admin/packages/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateStatus(id, status) {
+    const res = await apiRequest(`/admin/packages/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/packages/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  // Public / Simulator endpoints
+  async getFeatured() {
+    const res = await apiRequest('/packages/featured');
+    return res?.data || res;
+  },
+
+  async getPublicList(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.destination && params.destination !== 'All') q.append('destination', params.destination);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/packages${queryString}`);
+    return res?.data || res;
+  },
+
+  async getPublicDetails(id) {
+    const res = await apiRequest(`/packages/${id}`);
+    return res?.data || res;
+  },
+};
+
+export const couponsApi = {
+  async getStats() {
+    const res = await apiRequest('/admin/coupons/stats');
+    return res?.data || res;
+  },
+
+  async getAll(params = {}) {
+    const q = new URLSearchParams();
+    if (params.page) q.append('page', params.page);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.search) q.append('search', params.search);
+    if (params.category && params.category !== 'All' && params.category !== 'ALL') q.append('category', params.category);
+    if (params.status && params.status !== 'All') q.append('status', params.status);
+    if (params.discountType && params.discountType !== 'All' && params.discountType !== 'ALL') q.append('discountType', params.discountType);
+    if (params.sortBy) q.append('sortBy', params.sortBy);
+    if (params.sortOrder) q.append('sortOrder', params.sortOrder);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/admin/coupons${queryString}`);
+    return res?.data || res;
+  },
+
+  async getById(id) {
+    const res = await apiRequest(`/admin/coupons/${id}`);
+    return res?.data || res;
+  },
+
+  async create(data) {
+    const res = await apiRequest('/admin/coupons', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async update(id, data) {
+    const res = await apiRequest(`/admin/coupons/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateStatus(id, status) {
+    const res = await apiRequest(`/admin/coupons/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    return res?.data || res;
+  },
+
+  async delete(id) {
+    const res = await apiRequest(`/admin/coupons/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  async seed() {
+    const res = await apiRequest('/admin/coupons/seed', {
+      method: 'POST',
+    });
+    return res?.data || res;
+  },
+
+  async testValidate(data) {
+    const res = await apiRequest('/admin/coupons/test-validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  // Public portal methods
+  async getPublicList(category) {
+    const q = category ? `?category=${category}` : '';
+    const res = await apiRequest(`/coupons/public${q}`);
+    return res?.data || res;
+  },
+
+  async validatePublic(data) {
+    const res = await apiRequest('/coupons/validate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+};
+
+export default {
+  API_BASE_URL,
+  apiRequest,
+  authService,
+  usersApi,
+  driversApi,
+  vehiclesApi,
+  staffApi,
+  rolesApi,
+  auditApi,
+  settingsApi,
+  contactsApi,
+  cmsApi,
+  onboardingApi,
+  uploadApi,
+  hotelsApi,
+  destinationsApi,
+  packagesApi,
+  couponsApi,
+  decodeJwt,
+  isTokenExpired,
+};
+
+
+
+
+

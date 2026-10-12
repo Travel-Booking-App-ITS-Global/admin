@@ -11,11 +11,18 @@ import './App.css';
 
 // Pages
 import Login from './pages/Login.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Users from './pages/Users.jsx';
 import Flights from './pages/Flights.jsx';
-import { Hotels, Cabs } from './pages/HotelsCabs.jsx';
-import Packages from './pages/Packages.jsx';
+import { Cabs } from './pages/HotelsCabs.jsx';
+import HotelsListPage from './pages/hotels/HotelsListPage.jsx';
+import HotelFormPage from './pages/hotels/HotelFormPage.jsx';
+import DestinationsListPage from './pages/destinations/DestinationsListPage.jsx';
+import DestinationFormPage from './pages/destinations/DestinationFormPage.jsx';
+import PackagesListPage from './pages/packages/PackagesListPage.jsx';
+import PackageFormPage from './pages/packages/PackageFormPage.jsx';
+import CouponsListPage from './pages/coupons/CouponsListPage.jsx';
 import Support from './pages/Support.jsx';
 import Payments from './pages/Payments.jsx';
 import Staff from './pages/Staff.jsx';
@@ -25,6 +32,7 @@ import Reports from './pages/Reports.jsx';
 import {
   Itineraries, AIChat, CMS, Notifications, Settings, Contacts
 } from './pages/OtherPages.jsx';
+import ProtectedRoute from './components/auth/ProtectedRoute.jsx';
 
 function AdminShell() {
   const { sidebarCollapsed, toggleSidebar } = useApp();
@@ -52,10 +60,18 @@ function AdminShell() {
             <Route path="users"        element={<Users />} />
             <Route path="staff"        element={<Staff />} />
             <Route path="todos"        element={<Todos />} />
+            <Route path="destinations"          element={<DestinationsListPage />} />
+            <Route path="destinations/new"      element={<DestinationFormPage />} />
+            <Route path="destinations/edit/:id" element={<DestinationFormPage />} />
             <Route path="flights"      element={<Flights />} />
-            <Route path="hotels"       element={<Hotels />} />
-            <Route path="cabs"         element={<Cabs />} />
-            <Route path="packages"     element={<Packages />} />
+            <Route path="hotels"          element={<HotelsListPage />} />
+            <Route path="hotels/new"      element={<HotelFormPage />} />
+            <Route path="hotels/edit/:id" element={<HotelFormPage />} />
+            <Route path="cabs"            element={<Cabs />} />
+            <Route path="packages"          element={<PackagesListPage />} />
+            <Route path="packages/new"      element={<PackageFormPage />} />
+            <Route path="packages/edit/:id" element={<PackageFormPage />} />
+            <Route path="coupons"           element={<CouponsListPage />} />
             <Route path="itineraries"  element={<Itineraries />} />
             <Route path="ai-chat"      element={<AIChat />} />
             <Route path="reports"      element={<Reports />} />
@@ -78,7 +94,15 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/*" element={<AdminShell />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <AdminShell />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

@@ -1,6 +1,8 @@
-import { useState } from "react";
-import { BarChart2, TrendingUp, Users, DollarSign } from "lucide-react";
-import { PageHeader, StatusBadge } from "../components/ui/index.jsx";
+import { useState, useEffect } from "react";
+import ReactQuill from "react-quill-new";
+import "react-quill-new/dist/quill.snow.css";
+import { BarChart2, TrendingUp, Users, DollarSign, Loader2 } from "lucide-react";
+import { PageHeader, StatusBadge, ConfirmDeleteModal } from "../components/ui/index.jsx";
 import Modal from "../components/ui/Modal.jsx";
 import {
   mockItineraries,
@@ -8,7 +10,10 @@ import {
   mockFAQs,
 } from "../data/mockData.js";
 import { useApp } from "../store/AppContext.jsx";
+import api from "../services/api.js";
 import SettingsComponent from "./settings/Settings.jsx";
+import ContactsComponent from "./contacts/ContactsPage.jsx";
+import OnboardingSlidesTab from "./cms/OnboardingSlidesTab.jsx";
 import {
   AreaChart,
   Area,
@@ -378,38 +383,125 @@ export function AIChat() {
 /* =================== CMS =================== */
 export function CMS() {
   const { addToast } = useApp();
-  const [tab, setTab] = useState("faqs");
-  const [faqs, setFaqs] = useState(mockFAQs);
+  const [tab, setTab] = useState("onboarding");
+  const [faqs, setFaqs] = useState([]);
+  const [policies, setPolicies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [addFaqOpen, setAddFaqOpen] = useState(false);
+  const [editPolicy, setEditPolicy] = useState(null); // Will hold policy object to edit
   const [newFaq, setNewFaq] = useState({
     question: "",
     answer: "",
     category: "General",
   });
+  const [editFaq, setEditFaq] = useState(null);
+  const [faqToDelete, setFaqToDelete] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
-  const handleAddFaq = (e) => {
+  const fetchCmsData = async () => {
+    setLoading(true);
+    try {
+      if (tab === "faqs") {
+        const data = await api.cmsApi.getFaqs();
+        setFaqs(data);
+      } else if (tab === "policies") {
+        const data = await api.cmsApi.getPolicies();
+        setPolicies(data);
+      }
+    } catch (err) {
+      addToast(err.message || "Failed to load content", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCmsData();
+  }, [tab]);
+
+  const handleAddFaq = async (e) => {
     e.preventDefault();
     if (!newFaq.question || !newFaq.answer) {
       addToast("Please enter both question and answer", "error");
       return;
     }
-    const added = {
-      id: `faq-${Date.now()}`,
-      question: newFaq.question,
-      answer: newFaq.answer,
-      category: newFaq.category,
-      views: 0,
-      status: "active",
-    };
-    setFaqs((prev) => [added, ...prev]);
-    addToast("FAQ added successfully!", "success");
-    setAddFaqOpen(false);
-    setNewFaq({ question: "", answer: "", category: "General" });
+    
+    setIsSubmitting(true);
+    try {
+      await api.cmsApi.createFaq(newFaq);
+      addToast("FAQ added successfully!", "success");
+      setAddFaqOpen(false);
+      setNewFaq({ question: "", answer: "", category: "General" });
+      fetchCmsData();
+    } catch (err) {
+      addToast(err.message || "Failed to add FAQ", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const deleteFaq = (id) => {
-    setFaqs((prev) => prev.filter((f) => f.id !== id));
-    addToast("FAQ deleted", "error");
+  const confirmDeleteFaq = (f) => {
+    setFaqToDelete(f);
+    setDeleteModalOpen(true);
+  };
+
+  const deleteFaq = async () => {
+    if (!faqToDelete) return;
+    setIsSubmitting(true);
+    try {
+      await api.cmsApi.deleteFaq(faqToDelete.id);
+      addToast("FAQ marked as deleted", "error");
+      setFaqs((prev) => prev.filter((f) => f.id !== faqToDelete.id));
+      setDeleteModalOpen(false);
+      setFaqToDelete(null);
+    } catch (err) {
+      addToast(err.message || "Failed to delete FAQ", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateFaq = async (e) => {
+    e.preventDefault();
+    if (!editFaq.question || !editFaq.answer) {
+      addToast("Please enter both question and answer", "error");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await api.cmsApi.updateFaq(editFaq.id, {
+        question: editFaq.question,
+        answer: editFaq.answer,
+        category: editFaq.category,
+      });
+      addToast("FAQ updated successfully!", "success");
+      setEditFaq(null);
+      fetchCmsData();
+    } catch (err) {
+      addToast(err.message || "Failed to update FAQ", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdatePolicy = async (e) => {
+    e.preventDefault();
+    if (!editPolicy.content) {
+      addToast("Policy content cannot be empty", "error");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await api.cmsApi.updatePolicy(editPolicy.id, { content: editPolicy.content });
+      addToast("Policy updated successfully!", "success");
+      setEditPolicy(null);
+      fetchCmsData();
+    } catch (err) {
+      addToast(err.message || "Failed to update policy", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -419,16 +511,21 @@ export function CMS() {
         subtitle="FAQs, policies, and static pages"
       />
       <div className="tabs">
-        {["faqs", "policies"].map((t) => (
+        {[
+          { id: "onboarding", label: "📱 Onboarding Carousel" },
+          { id: "faqs", label: "❓ FAQs" },
+          { id: "policies", label: "📄 Policies" },
+        ].map((t) => (
           <button
-            key={t}
-            className={`tab-btn${tab === t ? " active" : ""}`}
-            onClick={() => setTab(t)}
+            key={t.id}
+            className={`tab-btn${tab === t.id ? " active" : ""}`}
+            onClick={() => setTab(t.id)}
           >
-            {t === "faqs" ? "❓ FAQs" : "📄 Policies"}
+            {t.label}
           </button>
         ))}
       </div>
+      {tab === "onboarding" && <OnboardingSlidesTab />}
       {tab === "faqs" && (
         <div className="card">
           <div className="card-header">
@@ -452,71 +549,72 @@ export function CMS() {
                 </tr>
               </thead>
               <tbody>
-                {faqs.map((f) => (
-                  <tr key={f.id}>
-                    <td style={{ fontWeight: 500, maxWidth: 400 }}>
-                      {f.question}
-                      {f.tags && f.tags.length > 0 && (
-                        <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
-                          {f.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              style={{
-                                fontSize: 9,
-                                background: "rgba(37, 99, 235, 0.08)",
-                                color: "var(--text-brand)",
-                                padding: "1px 6px",
-                                borderRadius: 4,
-                                fontWeight: 600,
-                                border: "1px solid rgba(37, 99, 235, 0.15)",
-                              }}
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          background: "var(--bg-hover)",
-                          padding: "2px 8px",
-                          borderRadius: "var(--radius-full)",
-                          fontWeight: 600,
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        {f.category}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 600 }}>
-                      {f.views.toLocaleString()}
-                    </td>
-                    <td>
-                      <StatusBadge status={f.status} />
-                    </td>
-                    <td>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontSize: 12 }}
-                          onClick={() => addToast("FAQ updated", "success")}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontSize: 12, color: "var(--danger-500)" }}
-                          onClick={() => deleteFaq(f.id)}
-                        >
-                          Delete
-                        </button>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "60px 10px" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+                        <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "var(--brand-600)" }} />
+                        <span style={{ color: "var(--text-muted)", fontSize: 13, fontWeight: 500 }}>
+                          Loading FAQs...
+                        </span>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : faqs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-muted)" }}>
+                      No FAQs found. Add one above.
+                    </td>
+                  </tr>
+                ) : (
+                  faqs.map((f) => (
+                    <tr key={f.id}>
+                      <td style={{ fontWeight: 500, maxWidth: 400 }}>
+                        <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>
+                          {f.question}
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {f.category.split(",").map((t, idx) => (
+                            <span key={idx} style={{
+                              fontSize: 10,
+                              background: "rgba(59, 130, 246, 0.12)",
+                              color: "var(--brand-700)",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                            }}>
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                        {f.category}
+                      </td>
+                      <td style={{ fontWeight: 600 }}>0</td>
+                      <td>
+                        <StatusBadge status={f.status.toLowerCase()} />
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ fontSize: 12, color: "var(--text-secondary)" }}
+                            onClick={() => setEditFaq(f)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ fontSize: 12, color: "var(--danger-500)" }}
+                            onClick={() => confirmDeleteFaq(f)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -524,36 +622,42 @@ export function CMS() {
       )}
       {tab === "policies" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {[
-            "Privacy Policy",
-            "Terms & Conditions",
-            "Cancellation Policy",
-            "Refund Policy",
-            "Cookie Policy",
-          ].map((p) => (
-            <div
-              key={p}
-              className="card"
-              style={{
-                padding: "16px 20px",
-                display: "flex",
-                alignItems: "center",
-                justifyDrop: "space-between",
-                justifyContent: "space-between",
-              }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 14 }}>📄 {p}</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <span className="badge badge-success">Published</span>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => addToast(`Editing ${p}…`, "info")}
-                >
-                  Edit
-                </button>
-              </div>
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "60px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+              <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "var(--brand-600)" }} />
+              <span style={{ color: "var(--text-muted)", fontSize: 13, fontWeight: 500 }}>
+                Loading policies...
+              </span>
             </div>
-          ))}
+          ) : policies.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-muted)" }}>
+              No policies found.
+            </div>
+          ) : (
+            policies.map((p) => (
+              <div
+                key={p.id}
+                className="card"
+                style={{
+                  padding: "16px 20px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 14 }}>📄 {p.title}</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <StatusBadge status={p.status.toLowerCase()} />
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setEditPolicy(p)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 
@@ -599,20 +703,16 @@ export function CMS() {
                 setNewFaq({ ...newFaq, category: e.target.value })
               }
             >
-              <option>General</option>
-              <option>Bookings</option>
-              <option>Payments</option>
-              <option>Refunds</option>
-              <option>Cabs</option>
+              <option value="General">General</option>
+              <option value="Flights">Flights</option>
+              <option value="Hotels">Hotels</option>
+              <option value="Cabs">Cabs</option>
+              <option value="Packages">Packages</option>
             </select>
           </div>
+
           <div
-            style={{
-              display: "flex",
-              gap: 10,
-              justifyContent: "flex-end",
-              marginTop: 10,
-            }}
+            style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}
           >
             <button
               type="button"
@@ -621,12 +721,127 @@ export function CMS() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Add FAQ
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? "Adding..." : "Add FAQ"}
             </button>
           </div>
         </form>
       </Modal>
+
+      {/* Edit Policy Modal */}
+      <Modal
+        open={!!editPolicy}
+        onClose={() => setEditPolicy(null)}
+        title={editPolicy ? `Edit ${editPolicy.title}` : "Edit Policy"}
+        width="600px"
+      >
+        <form className="card-body" onSubmit={handleUpdatePolicy}>
+          <div className="form-group">
+            <label className="form-label">Policy Content *</label>
+            <div style={{ height: "300px", marginBottom: "40px" }}>
+              <ReactQuill
+                theme="snow"
+                value={editPolicy?.content || ""}
+                onChange={(val) =>
+                  setEditPolicy({ ...editPolicy, content: val })
+                }
+                style={{ height: "100%" }}
+              />
+            </div>
+          </div>
+
+          <div
+            style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}
+          >
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setEditPolicy(null)}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save Policy"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit FAQ Modal */}
+      <Modal
+        open={!!editFaq}
+        onClose={() => setEditFaq(null)}
+        title="Edit FAQ"
+      >
+        <form
+          onSubmit={handleUpdateFaq}
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
+        >
+          <div className="form-group">
+            <label className="form-label">Question *</label>
+            <input
+              className="form-input"
+              value={editFaq?.question || ""}
+              onChange={(e) =>
+                setEditFaq({ ...editFaq, question: e.target.value })
+              }
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Answer *</label>
+            <textarea
+              className="form-input"
+              rows={3}
+              value={editFaq?.answer || ""}
+              onChange={(e) => setEditFaq({ ...editFaq, answer: e.target.value })}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Category</label>
+            <select
+              className="form-input form-select"
+              value={editFaq?.category || "General"}
+              onChange={(e) =>
+                setEditFaq({ ...editFaq, category: e.target.value })
+              }
+            >
+              <option value="General">General</option>
+              <option value="Flights">Flights</option>
+              <option value="Hotels">Hotels</option>
+              <option value="Cabs">Cabs</option>
+              <option value="Packages">Packages</option>
+            </select>
+          </div>
+
+          <div
+            style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}
+          >
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setEditFaq(null)}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? "Saving..." : "Save FAQ"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setFaqToDelete(null);
+        }}
+        onConfirm={deleteFaq}
+        itemName={faqToDelete?.question}
+        isDeleting={isSubmitting}
+      />
     </div>
   );
 }
@@ -806,242 +1021,5 @@ export function Settings() {
 
 /* =================== CONTACTS =================== */
 export function Contacts() {
-  const { addToast } = useApp();
-  const [contacts, setContacts] = useState([
-    {
-      id: 1,
-      name: "Flights Support",
-      phone: "+91 1800 200 1234",
-      whatsapp: "+91 98765 00001",
-      type: "Flight",
-    },
-    {
-      id: 2,
-      name: "Hotels Support",
-      phone: "+91 1800 200 5678",
-      whatsapp: "+91 98765 00002",
-      type: "Hotel",
-    },
-    {
-      id: 3,
-      name: "Cabs Dispatch",
-      phone: "+91 1800 200 9012",
-      whatsapp: "+91 98765 00003",
-      type: "Cab",
-    },
-    {
-      id: 4,
-      name: "Emergency Line",
-      phone: "+91 1800 911 0000",
-      whatsapp: "+91 98765 00099",
-      type: "Emergency",
-    },
-  ]);
-  const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    whatsapp: "",
-    type: "Flight",
-  });
-
-  const handleAddContact = (e) => {
-    e.preventDefault();
-    if (!form.name || !form.phone) {
-      addToast("Please fill out name and phone", "error");
-      return;
-    }
-    const added = {
-      id: Date.now(),
-      ...form,
-    };
-    setContacts((prev) => [...prev, added]);
-    addToast("Contact added!", "success");
-    setAddOpen(false);
-    setForm({ name: "", phone: "", whatsapp: "", type: "Flight" });
-  };
-
-  const deleteContact = (id) => {
-    setContacts((prev) => prev.filter((c) => c.id !== id));
-    addToast("Contact deleted", "error");
-  };
-
-  return (
-    <div>
-      <PageHeader
-        title="Contact Management"
-        subtitle="Manage inquiry numbers and WhatsApp contacts"
-        actions={
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setAddOpen(true)}
-          >
-            + Add Contact
-          </button>
-        }
-      />
-      <div className="grid-2">
-        {contacts.map((c) => (
-          <div key={c.id} className="card" style={{ padding: "18px 20px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyDrop: "space-between",
-                justifyContent: "space-between",
-                marginBottom: 12,
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--font-heading)",
-                  fontWeight: 700,
-                  fontSize: 15,
-                }}
-              >
-                {c.name}
-              </span>
-              <span
-                style={{
-                  fontSize: 11,
-                  background: "var(--brand-50)",
-                  color: "var(--brand-700)",
-                  padding: "2px 8px",
-                  borderRadius: "var(--radius-full)",
-                  fontWeight: 600,
-                }}
-              >
-                {c.type}
-              </span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 13,
-                }}
-              >
-                <span style={{ color: "var(--text-muted)", fontSize: 18 }}>
-                  📞
-                </span>
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
-                  {c.phone}
-                </span>
-              </div>
-              {c.whatsapp && (
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    fontSize: 13,
-                  }}
-                >
-                  <span style={{ color: "var(--text-muted)", fontSize: 18 }}>
-                    💬
-                  </span>
-                  <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
-                    {c.whatsapp}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => addToast("Editing contact…", "info")}
-              >
-                Edit
-              </button>
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ color: "var(--danger-500)" }}
-                onClick={() => deleteContact(c.id)}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <Modal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        title="Add New Contact"
-      >
-        <form
-          onSubmit={handleAddContact}
-          style={{ display: "flex", flexDirection: "column", gap: 14 }}
-        >
-          <div className="form-group">
-            <label className="form-label">Contact Name *</label>
-            <input
-              className="form-input"
-              placeholder="e.g. Packages Desk"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-            />
-          </div>
-          <div className="grid-2" style={{ gap: 12 }}>
-            <div className="form-group">
-              <label className="form-label">Phone Number *</label>
-              <input
-                className="form-input"
-                placeholder="e.g. +91 1800 200 5555"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">WhatsApp Number</label>
-              <input
-                className="form-input"
-                placeholder="e.g. +91 98765 00055"
-                value={form.whatsapp}
-                onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-              />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Contact Type</label>
-            <select
-              className="form-input form-select"
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-            >
-              <option>Flight</option>
-              <option>Hotel</option>
-              <option>Cab</option>
-              <option>Package</option>
-              <option>Emergency</option>
-            </select>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              justifyContent: "flex-end",
-              marginTop: 10,
-            }}
-          >
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setAddOpen(false)}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary">
-              Add Contact
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </div>
-  );
+  return <ContactsComponent />;
 }

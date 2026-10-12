@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Trash2, Loader2, Radio } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
-import { StatusBadge } from "../../components/ui/index.jsx";
+import { StatusBadge, ConfirmDeleteModal } from "../../components/ui/index.jsx";
 import Modal from "../../components/ui/Modal.jsx";
-import { mockAPIConfigs } from "../../data/mockData.js";
+import { settingsApi } from "../../services/api.js";
 
 const STATUS_DOT = {
   active: "#22c55e",
@@ -13,10 +13,16 @@ const STATUS_DOT = {
 
 export default function ConnectedApisTab() {
   const { addToast } = useApp();
-  const [apiConfigs, setApiConfigs] = useState(mockAPIConfigs);
+  const [apiConfigs, setApiConfigs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pingingId, setPingingId] = useState(null);
 
   // Modal / Form States
   const [addApiOpen, setAddApiOpen] = useState(false);
+  const [addingApi, setAddingApi] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [apiToDelete, setApiToDelete] = useState(null);
+
   const [newApiName, setNewApiName] = useState("");
   const [newApiType, setNewApiType] = useState("Flight");
   const [newApiProvider, setNewApiProvider] = useState("");
@@ -36,20 +42,52 @@ export default function ConnectedApisTab() {
     "Navigation",
   ];
 
-  const testApi = (id, name) => {
-    addToast(`Pinging ${name}…`, "info");
-    setTimeout(() => {
-      const latency = Math.floor(Math.random() * 200) + 40;
-      setApiConfigs((prev) =>
-        prev.map((a) =>
-          a.id === id ? { ...a, latency: `${latency}ms`, status: "active" } : a,
-        ),
-      );
-      addToast(`${name} responded in ${latency}ms!`, "success");
-    }, 900);
+  const loadApis = async () => {
+    try {
+      const data = await settingsApi.getApis();
+      if (Array.isArray(data)) {
+        setApiConfigs(
+          data.map((a) => ({
+            ...a,
+            type: a.category || a.type || "Flight",
+            latency: a.latencyMs ? `${a.latencyMs}ms` : "65ms",
+            lastPing: "Active",
+          }))
+        );
+      }
+    } catch (err) {
+      console.warn("Failed to load APIs:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddApi = (e) => {
+  useEffect(() => {
+    loadApis();
+  }, []);
+
+  const testApi = async (id, name) => {
+    setPingingId(id);
+    addToast(`Pinging ${name} gateway…`, "info");
+    try {
+      const res = await settingsApi.pingApi(id);
+      const latencyStr = res.latency || `${res.latencyMs || 50}ms`;
+      setApiConfigs((prev) =>
+        prev.map((a) =>
+          a.id === id || a.apiId === id
+            ? { ...a, latency: latencyStr, status: "active", lastPing: "Just now" }
+            : a
+        )
+      );
+      addToast(`${name} responded in ${latencyStr}!`, "success");
+    } catch (err) {
+      addToast(err.message || `Failed to ping ${name}`, "error");
+    } finally {
+      setPingingId(null);
+    }
+  };
+
+  const handleAddApi = async (e) => {
     e.preventDefault();
     if (!newApiName.trim() || !newApiProvider.trim()) {
       addToast("Please fill out API Name and Provider", "error");
@@ -57,41 +95,60 @@ export default function ConnectedApisTab() {
     }
     const parsedTags = newApiTags
       ? newApiTags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean)
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean)
       : [];
-    const added = {
-      id: `API${Date.now()}`,
-      name: newApiName,
-      type: newApiType,
-      provider: newApiProvider,
-      status: "active",
-      lastPing: "Just now",
-      latency: "45ms",
-      tags: parsedTags,
-    };
-    setApiConfigs((prev) => [...prev, added]);
-    addToast(`${newApiName} connected successfully!`, "success");
-    setNewApiName("");
-    setNewApiProvider("");
-    setNewApiTags("");
-    setAddApiOpen(false);
+
+    setAddingApi(true);
+    try {
+      const res = await settingsApi.createApi({
+        name: newApiName.trim(),
+        provider: newApiProvider.trim(),
+        category: newApiType,
+        tags: parsedTags,
+        status: "active",
+      });
+      addToast(`${newApiName} connected successfully in database!`, "success");
+      setNewApiName("");
+      setNewApiProvider("");
+      setNewApiTags("");
+      setAddApiOpen(false);
+      await loadApis();
+    } catch (err) {
+      addToast(err.message || "Failed to add API", "error");
+    } finally {
+      setAddingApi(false);
+    }
   };
 
-  const handleDeleteApi = (id, name) => {
-    setApiConfigs((prev) => prev.filter((a) => a.id !== id));
-    addToast(`${name} disconnected!`, "warning");
+  const promptDeleteApi = (id, name) => {
+    setApiToDelete({ id, name });
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteApi = async () => {
+    if (!apiToDelete) return;
+    try {
+      await settingsApi.deleteApi(apiToDelete.id);
+      setApiConfigs((prev) => prev.filter((a) => a.id !== apiToDelete.id));
+      addToast(`${apiToDelete.name} disconnected!`, "warning");
+      setDeleteModalOpen(false);
+      setApiToDelete(null);
+    } catch (err) {
+      addToast(err.message || "Failed to disconnect API", "error");
+    }
   };
 
   const filteredApiConfigs = apiConfigs.filter((api) => {
+    const typeStr = api.type || api.category || "";
     const matchesSearch =
       api.name.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
       api.provider.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
-      api.type.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
+      typeStr.toLowerCase().includes(apisSearchTerm.toLowerCase()) ||
       (api.tags &&
         api.tags.some((t) =>
-          t.toLowerCase().includes(apisSearchTerm.toLowerCase()),
+          t.toLowerCase().includes(apisSearchTerm.toLowerCase())
         ));
     const matchesFilter =
       activeApiFilter === "All" ||
@@ -197,130 +254,139 @@ export default function ConnectedApisTab() {
               </tr>
             </thead>
             <tbody>
-              {filteredApiConfigs.map((a) => (
-                <tr key={a.id}>
-                  <td style={{ fontWeight: 600 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: STATUS_DOT[a.status] || "#9ca3af",
-                          display: "inline-block",
-                          flexShrink: 0,
-                        }}
-                      />
+              {loading ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "40px 0" }}>
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, color: "var(--text-muted)" }}>
+                      <Loader2 size={20} className="spin" style={{ color: "var(--brand-500)" }} />
+                      <span>Loading connected integrations from database...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredApiConfigs.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+                    No connected APIs found in registry.
+                  </td>
+                </tr>
+              ) : (
+                filteredApiConfigs.map((a) => (
+                  <tr key={a.id}>
+                    <td style={{ fontWeight: 600 }}>
                       <div
                         style={{
                           display: "flex",
-                          flexDirection: "column",
-                          gap: 4,
+                          alignItems: "center",
+                          gap: 8,
                         }}
                       >
-                        <span>{a.name}</span>
+                        <span
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            background: STATUS_DOT[a.status] || "#9ca3af",
+                            display: "inline-block",
+                            flexShrink: 0,
+                          }}
+                        />
                         <div
-                          style={{ display: "flex", gap: 4, flexWrap: "wrap" }}
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 4,
+                          }}
                         >
-                          {a.tags &&
-                            a.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                style={{
-                                  fontSize: 9,
-                                  background: "rgba(16, 185, 129, 0.08)",
-                                  color: "#10b981",
-                                  padding: "1px 5px",
-                                  borderRadius: "3px",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {tag}
-                              </span>
-                            ))}
+                          <span>{a.name}</span>
+                          <div
+                            style={{ display: "flex", gap: 4, flexWrap: "wrap" }}
+                          >
+                            {a.tags &&
+                              a.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  style={{
+                                    fontSize: 9,
+                                    background: "rgba(16, 185, 129, 0.08)",
+                                    color: "#10b981",
+                                    padding: "1px 5px",
+                                    borderRadius: "3px",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        background: "var(--bg-hover)",
-                        padding: "2px 8px",
-                        borderRadius: "var(--radius-full)",
-                        fontWeight: 600,
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      {a.type}
-                    </span>
-                  </td>
-                  <td style={{ fontSize: 13 }}>{a.provider}</td>
-                  <td>
-                    <StatusBadge status={a.status} />
-                  </td>
-                  <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                    {a.lastPing}
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        fontFamily: "monospace",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color:
-                          a.latency === "-"
-                            ? "var(--text-muted)"
-                            : parseInt(a.latency) > 300
-                              ? "var(--warning-600)"
-                              : "var(--success-600)",
-                      }}
-                    >
-                      {a.latency}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => testApi(a.id, a.name)}
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          background: "var(--bg-hover)",
+                          padding: "2px 8px",
+                          borderRadius: "var(--radius-full)",
+                          fontWeight: 600,
+                          color: "var(--text-secondary)",
+                        }}
                       >
-                        Test
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: "var(--danger-500)", padding: 4 }}
-                        onClick={() => handleDeleteApi(a.id, a.name)}
-                        title="Disconnect API"
+                        {a.type}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 13 }}>{a.provider}</td>
+                    <td>
+                      <StatusBadge status={a.status} />
+                    </td>
+                    <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                      {a.lastPing}
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color:
+                            a.latency === "-"
+                              ? "var(--text-muted)"
+                              : parseInt(a.latency) > 300
+                                ? "var(--warning-600)"
+                                : "var(--success-600)",
+                        }}
                       >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredApiConfigs.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    style={{
-                      textAlign: "center",
-                      padding: "30px 0",
-                      color: "var(--text-muted)",
-                      fontSize: 13,
-                    }}
-                  >
-                    No APIs found matching the search/filter criteria.
-                  </td>
-                </tr>
-              )}
+                        {a.latency}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => testApi(a.id, a.name)}
+                          disabled={pingingId === a.id}
+                        >
+                          {pingingId === a.id ? (
+                            <>
+                              <Loader2 size={12} className="spin" style={{ marginRight: 4 }} />
+                              Pinging...
+                            </>
+                          ) : (
+                            "Test"
+                          )}
+                        </button>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ color: "var(--danger-500)", padding: 4 }}
+                          onClick={() => promptDeleteApi(a.id, a.name)}
+                          title="Disconnect API"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )))}
             </tbody>
           </table>
         </div>
@@ -405,12 +471,22 @@ export default function ConnectedApisTab() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Connect API
+            <button type="submit" className="btn btn-primary" disabled={addingApi}>
+              {addingApi ? "Connecting..." : "Connect API"}
             </button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDeleteModal
+        open={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setApiToDelete(null);
+        }}
+        onConfirm={confirmDeleteApi}
+        itemName={apiToDelete?.name}
+      />
     </div>
   );
 }

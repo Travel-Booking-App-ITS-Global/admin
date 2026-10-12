@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Plane, Hotel, Car, Package, Map,
   MessageSquare, BarChart2, FileText, Bell, Headphones,
-  Settings, CreditCard, Phone, ChevronRight, LogOut, Activity, Shield, Compass, CheckSquare
+  Settings, CreditCard, Phone, ChevronRight, LogOut, Activity, Shield, Compass, CheckSquare, Ticket
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 
@@ -18,17 +18,19 @@ const NAV_GROUPS = [
   {
     label: 'People',
     items: [
-      { to: '/users',      label: 'Users',           icon: Users,     badge: '3.2k' },
+      { to: '/users',      label: 'Users',           icon: Users },
       { to: '/staff',      label: 'Staff & EMS',     icon: Shield },
     ],
   },
   {
-    label: 'Bookings',
+    label: 'Bookings & Inventory',
     items: [
+      { to: '/destinations', label: 'Destinations',  icon: Compass },
       { to: '/flights',    label: 'Flights',         icon: Plane },
       { to: '/hotels',     label: 'Hotels',          icon: Hotel },
       { to: '/cabs',       label: 'Cabs',            icon: Car },
       { to: '/packages',   label: 'Packages',        icon: Package },
+      { to: '/coupons',    label: 'Coupons & Promos',icon: Ticket, badge: 'Offers' },
     ],
   },
   {
@@ -63,7 +65,7 @@ const NAV_GROUPS = [
 ];
 
 export default function Sidebar() {
-  const { sidebarCollapsed, adminName, adminEmail, adminAvatar } = useApp();
+  const { sidebarCollapsed, adminName, adminEmail, adminAvatar, logoutAdmin, userStats } = useApp();
 
   const initials = adminName
     ? adminName
@@ -73,6 +75,18 @@ export default function Sidebar() {
         .join('')
         .toUpperCase()
     : 'SA';
+
+  const getBadge = (item) => {
+    if (item.to === '/users') {
+      if (userStats && typeof userStats.total === 'number') {
+        return userStats.total >= 1000
+          ? `${(userStats.total / 1000).toFixed(1)}k`
+          : String(userStats.total);
+      }
+      return null;
+    }
+    return item.badge;
+  };
 
   return (
     <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
@@ -92,27 +106,35 @@ export default function Sidebar() {
         {NAV_GROUPS.map(group => (
           <div key={group.label}>
             <div className="nav-section-label">{group.label}</div>
-            {group.items.map(item => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                data-tooltip={sidebarCollapsed ? item.label : undefined}
-                className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-              >
-                <item.icon className="nav-item-icon" size={18} />
-                <span className="nav-item-label">{item.label}</span>
-                {item.badge && (
-                  <span className="nav-item-badge">{item.badge}</span>
-                )}
-              </NavLink>
-            ))}
+            {group.items.map(item => {
+              const badge = getBadge(item);
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  data-tooltip={sidebarCollapsed ? item.label : undefined}
+                  className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+                >
+                  <item.icon className="nav-item-icon" size={18} />
+                  <span className="nav-item-label">{item.label}</span>
+                  {badge !== null && badge !== undefined && (
+                    <span className="nav-item-badge">{badge}</span>
+                  )}
+                </NavLink>
+              );
+            })}
           </div>
         ))}
       </nav>
 
       {/* Footer / User */}
       <div className="sidebar-footer">
-        <NavLink to="/login" className="nav-item" style={{ marginBottom: 8 }}>
+        <NavLink 
+          to="/login" 
+          onClick={logoutAdmin}
+          className="nav-item" 
+          style={{ marginBottom: 8 }}
+        >
           <LogOut className="nav-item-icon" size={18} />
           <span className="nav-item-label">Logout</span>
         </NavLink>

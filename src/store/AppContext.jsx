@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { usersApi } from "../services/api.js";
 
 const AppContext = createContext(null);
 
@@ -194,7 +195,55 @@ export function AppProvider({ children }) {
   const [adminName, setAdminName] = useState(() => load("its_admin_name", "Super Admin"));
   const [adminEmail, setAdminEmail] = useState(() => load("its_admin_email", "admin@itsglobal.in"));
   const [adminAvatar, setAdminAvatar] = useState(() => load("its_admin_avatar", ""));
-  const [adminPassword, setAdminPassword] = useState(() => load("its_admin_password", "admin123"));
+  const [adminRole, setAdminRole] = useState(() => load("its_admin_role", "SUPER_ADMIN"));
+  const [adminPassword, setAdminPassword] = useState(() => load("its_admin_password", "Admin@123456"));
+  const [userStats, setUserStats] = useState(null);
+
+  const fetchUserStats = useCallback(async () => {
+    try {
+      const stats = await usersApi.getStats();
+      if (stats) {
+        setUserStats(stats);
+        return stats;
+      }
+    } catch {
+      // Silent error when unauthenticated or network failure
+    }
+    return null;
+  }, []);
+
+  useEffect(() => {
+    fetchUserStats();
+  }, [fetchUserStats]);
+
+  const loginAdmin = (user, tokens) => {
+    if (user) {
+      setAdminName(user.name || 'Admin');
+      setAdminEmail(user.email || '');
+      setAdminRole(user.role || 'SUPER_ADMIN');
+      if (user.avatar) setAdminAvatar(user.avatar);
+      save("its_admin_name", user.name || 'Admin');
+      save("its_admin_email", user.email || '');
+      save("its_admin_role", user.role || 'SUPER_ADMIN');
+      if (user.avatar) save("its_admin_avatar", user.avatar);
+      save("its_admin_user_data", user);
+    }
+    if (tokens?.accessToken) {
+      localStorage.setItem("its_admin_access_token", tokens.accessToken);
+    }
+    if (tokens?.refreshToken) {
+      localStorage.setItem("its_admin_refresh_token", tokens.refreshToken);
+    }
+    fetchUserStats();
+  };
+
+  const logoutAdmin = () => {
+    localStorage.removeItem("its_admin_access_token");
+    localStorage.removeItem("its_admin_refresh_token");
+    localStorage.removeItem("its_admin_user_data");
+    setAdminName("Super Admin");
+    setUserStats(null);
+  };
 
   const updateAdminProfile = (name, email, avatar) => {
     setAdminName(name);
@@ -257,7 +306,7 @@ export function AppProvider({ children }) {
   };
 
   const addToast = (message, type = "success", duration = 3500) => {
-    const id = Date.now();
+    const id = Date.now() + Math.random().toString(36).substring(2);
     setToasts((t) => [...t, { id, message, type }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), duration);
   };
@@ -280,8 +329,14 @@ export function AppProvider({ children }) {
         adminName,
         adminEmail,
         adminAvatar,
+        adminRole,
+        loginAdmin,
+        logoutAdmin,
         updateAdminProfile,
         changeAdminPassword,
+        userStats,
+        setUserStats,
+        fetchUserStats,
       }}
     >
       {children}
