@@ -1,0 +1,170 @@
+/* ==========================================================================
+   DESIGN TOKENS — ITS GLOBAL TRAVEL PLATFORM (Source of Truth)
+   Shared across Admin Panel & Public Website
+   ========================================================================== */
+
+/* --- Google Fonts --- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=Poppins:wght@400;500;600;700&family=Nunito:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+/* --- Density Tokens --- */
+[data-density="compact"]  { --row-py: 6px;  --card-p: 14px 18px; --page-gap: 14px; }
+[data-density="default"]  { --row-py: 10px; --card-p: 16px 20px; --page-gap: 20px; }
+[data-density="relaxed"]  { --row-py: 16px; --card-p: 24px 28px; --page-gap: 28px; }
+
+:root {
+  /* Brand */
+  --brand-50:  #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+  --brand-800: #1e40af;
+  --brand-900: #1e3a8a;
+
+  /* Accent (Violet) */
+  --accent-400: #a78bfa;
+  --accent-500: #8b5cf6;
+  --accent-600: #7c3aed;
+
+  /* Success */
+  --success-50:  #f0fdf4;
+  --success-400: #4ade80;
+  --success-500: #22c55e;
+  --success-600: #16a34a;
+
+  /* Warning */
+  --warning-50:  #fffbeb;
+  --warning-400: #fbbf24;
+  --warning-500: #f59e0b;
+  --warning-600: #d97706;
+
+  /* Danger */
+  --danger-50:  #fef2f2;
+  --danger-400: #f87171;
+  --danger-500: #ef4444;
+  --danger-600: #dc2626;
+
+  /* Neutrals */
+  --gray-0:   #ffffff;
+  --gray-25:  #fcfcfd;
+  --gray-50:  #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-150: #eaecf0;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+  --gray-950: #030712;
+
+  /* Semantic — Light Mode */
+  --bg-app:        #f8fafc;
+  --bg-card:       rgba(255, 255, 255, 0.75);
+  --bg-sidebar:    rgba(255, 255, 255, 0.8);
+  --sidebar-border: rgba(15, 23, 42, 0.05);
+  --sidebar-logo-name:   #0f172a;
+  --sidebar-logo-sub:    #64748b;
+  --sidebar-section:     #94a3b8;
+  --sidebar-text:        #475569;
+  --sidebar-text-hover:  #0f172a;
+  --sidebar-bg-hover:    rgba(15, 23, 42, 0.04);
+  --sidebar-active-bg:   rgba(37, 99, 235, 0.08);
+  --sidebar-active-text: #2563eb;
+  --bg-header:     rgba(255, 255, 255, 0.75);
+  --bg-input:      rgba(255, 255, 255, 0.9);
+  --bg-hover:      rgba(15, 23, 42, 0.03);
+  --bg-active:     #eff6ff;
+
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
+  --text-inverse:   #ffffff;
+  --text-brand:     #2563eb;
+
+  --border-default: rgba(15, 23, 42, 0.06);
+  --border-strong:  rgba(15, 23, 42, 0.12);
+  --border-brand:   #3b82f6;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(0,0,0,.03);
+  --shadow-sm: 0 2px 8px 0 rgba(0,0,0,.04);
+  --shadow-md: 0 8px 24px -4px rgba(31,38,135,.06);
+  --shadow-lg: 0 16px 40px -10px rgba(31,38,135,.1);
+  --shadow-xl: 0 24px 60px -15px rgba(31,38,135,.15);
+  --shadow-card: 0 8px 32px 0 rgba(31, 38, 135, 0.03), 0 0 0 1px rgba(15, 23, 42, 0.04);
+  --shadow-glow: 0 0 0 3px rgba(59,130,246,.15);
+
+  /* Radius (4/8px scale) */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 32px;
+  --radius-full: 9999px;
+
+  /* Typography */
+  --font-body:    'Inter', system-ui, sans-serif;
+  --font-heading: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+
+  /* Spacing Scale (4/8px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Layout */
+  --sidebar-w: 260px;
+  --sidebar-collapsed-w: 78px;
+  --header-h: 70px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(.4,0,.2,1);
+  --transition-base: 250ms cubic-bezier(.4,0,.2,1);
+  --transition-slow: 350ms cubic-bezier(.4,0,.2,1);
+  --transition-theme: 300ms cubic-bezier(.4,0,.2,1);
+}
+
+/* --- Dark Mode Tokens --- */
+[data-theme="dark"] {
+  --bg-app:        #030712;
+  --bg-card:       rgba(15, 23, 42, 0.45);
+  --bg-sidebar:    rgba(3, 7, 18, 0.65);
+  --sidebar-border:      rgba(255,255,255,.05);
+  --sidebar-logo-name:   #ffffff;
+  --sidebar-logo-sub:    rgba(255,255,255,.45);
+  --sidebar-section:     rgba(255,255,255,.3);
+  --sidebar-text:        rgba(255,255,255,.6);
+  --sidebar-text-hover:  rgba(255,255,255,.95);
+  --sidebar-bg-hover:    rgba(255,255,255,.05);
+  --sidebar-active-bg:   rgba(37,99,235,.15);
+  --sidebar-active-text: #60a5fa;
+  --bg-header:     rgba(15, 23, 42, 0.45);
+  --bg-input:      rgba(15, 23, 42, 0.6);
+  --bg-hover:      rgba(255, 255, 255, 0.04);
+  --bg-active:     rgba(37, 99, 235, 0.15);
+
+  --text-primary:   #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
+  --text-inverse:   #0f172a;
+  --text-brand:     #60a5fa;
+
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-strong:  rgba(255, 255, 255, 0.15);
+  --border-brand:   #60a5fa;
+
+  --shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}

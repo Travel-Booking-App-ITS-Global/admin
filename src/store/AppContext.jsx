@@ -196,6 +196,7 @@ export function AppProvider({ children }) {
   const [adminEmail, setAdminEmail] = useState(() => load("its_admin_email", "admin@itsglobal.in"));
   const [adminAvatar, setAdminAvatar] = useState(() => load("its_admin_avatar", ""));
   const [adminRole, setAdminRole] = useState(() => load("its_admin_role", "SUPER_ADMIN"));
+  const [adminPassword, setAdminPassword] = useState(() => load("its_admin_password", "Admin@123456"));
   const [userStats, setUserStats] = useState(null);
 
   const fetchUserStats = useCallback(async () => {

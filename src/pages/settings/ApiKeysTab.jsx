@@ -77,6 +77,16 @@ export default function ApiKeysTab() {
   const [activeKeyFilter, setActiveKeyFilter] = useState("All");
   const keysFilterTags = ["All", "Payment", "Maps", "Auth", "Flights", "Production", "Development"];
 
+  const filteredApiKeys = apiKeys.filter((key) => {
+    const matchesSearch =
+      (key.name || "").toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
+      (key.provider || "").toLowerCase().includes(keysSearchTerm.toLowerCase()) ||
+      (key.tags && key.tags.some((t) => t.toLowerCase().includes(keysSearchTerm.toLowerCase())));
+    const matchesFilter =
+      activeKeyFilter === "All" || (key.tags && key.tags.includes(activeKeyFilter));
+    return matchesSearch && matchesFilter;
+  });
+
   const loadKeys = async () => {
     try {
       const data = await settingsApi.getKeys();

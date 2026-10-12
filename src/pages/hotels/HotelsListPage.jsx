@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { PageHeader, Pagination } from "../../components/ui/index.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { Skeleton, EmptyState, Badge } from "../../shared/ui/index.js";
 import { useApp } from "../../store/AppContext.jsx";
 import { hotelsApi } from "../../services/api.js";
 
@@ -281,45 +282,44 @@ export default function HotelsListPage() {
 
       {/* Content Area */}
       {loading ? (
-        <div style={{ display: "flex", justifyContent: "center", padding: 80 }}>
-          <Loader2 size={36} className="spin" style={{ color: "var(--brand-500)" }} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 20 }}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card" style={{ padding: 20 }}>
+              <Skeleton height="180px" borderRadius="var(--radius-md)" style={{ marginBottom: 12 }} />
+              <Skeleton height="20px" width="70%" style={{ marginBottom: 8 }} />
+              <Skeleton height="14px" width="40%" style={{ marginBottom: 14 }} />
+              <Skeleton height="32px" width="100%" borderRadius="var(--radius-sm)" />
+            </div>
+          ))}
         </div>
       ) : hotels.length === 0 ? (
-        <div
-          className="card"
-          style={{
-            padding: 60,
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 14,
-          }}
-        >
-          <Hotel size={40} color="var(--text-muted)" />
-          <div style={{ fontSize: 16, fontWeight: 700 }}>No Hotel Properties Found</div>
-          <div style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 400 }}>
-            {searchTerm || selectedType !== "All"
+        <EmptyState
+          icon={<Hotel size={32} />}
+          title="No Hotel Properties Found"
+          description={
+            searchTerm || selectedType !== "All"
               ? "No hotels match your search criteria. Try adjusting your query or filter."
-              : "No hotel properties have been created yet. Add your first hotel property."}
-          </div>
-          {searchTerm || selectedType !== "All" ? (
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                setSearchTerm("");
-                setSelectedType("All");
-              }}
-            >
-              Reset Filters
-            </button>
-          ) : (
-            <Link to="/hotels/new" className="btn btn-primary btn-sm">
-              <Plus size={14} style={{ marginRight: 6 }} />
-              Add First Hotel
-            </Link>
-          )}
-        </div>
+              : "No hotel properties have been created yet. Add your first luxury hotel property."
+          }
+          action={
+            searchTerm || selectedType !== "All" ? (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedType("All");
+                }}
+              >
+                Reset Filters
+              </button>
+            ) : (
+              <Link to="/hotels/new" className="btn btn-primary btn-sm">
+                <Plus size={14} style={{ marginRight: 6 }} />
+                Add First Hotel
+              </Link>
+            )
+          }
+        />
       ) : viewMode === "grid" ? (
         /* ── GRID CARDS VIEW ── */
         <div

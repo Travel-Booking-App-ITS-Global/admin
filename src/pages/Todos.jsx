@@ -25,6 +25,14 @@ const TODO_TAGS = [
   "Cab", "Support", "Review", "Blocked",
 ];
 
+const CATEGORIES = [
+  "All", "System", "Payments", "CMS", "Operations", "Legal", "Finance", "Support", "General"
+];
+
+const STAFF_MEMBERS = [
+  "Aarush Singhania", "Devansh Dixit", "Meera Nair", "Vikram Malhotra", "Pooja Sharma", "Super Admin"
+];
+
 const INITIAL_TODOS = [
   {
     id: "TSK001",

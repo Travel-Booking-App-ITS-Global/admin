@@ -29,7 +29,7 @@ export default function CouponFormModal({
 }) {
   const isEdit = Boolean(initialData?.id);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     code: '',
     title: '',
     description: '',
@@ -51,7 +51,7 @@ export default function CouponFormModal({
       'Cannot be clubbed with any other promotional vouchers.',
       'Discount applies on base fare before taxes and surcharges.',
     ],
-  });
+  }));
 
   const [newTerm, setNewTerm] = useState('');
   const [copiedPreview, setCopiedPreview] = useState(false);
