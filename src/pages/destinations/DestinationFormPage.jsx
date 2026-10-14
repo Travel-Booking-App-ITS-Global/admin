@@ -22,7 +22,15 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useApp } from "../../store/AppContext.jsx";
-import { destinationsApi } from "../../services/api.js";
+import {
+  destinationsApi,
+  geoApi,
+  currenciesApi,
+  languagesApi,
+  timezonesApi,
+  bestTimeApi,
+} from "../../services/api.js";
+import { ImageUpload } from "../../components/ui/index.jsx";
 import AttractionModal from "./AttractionModal.jsx";
 
 const SECTIONS = [
@@ -72,10 +80,49 @@ export default function DestinationFormPage() {
 
   const [newImageInput, setNewImageInput] = useState("");
 
+  // Master Data States
+  const [countriesList, setCountriesList] = useState([]);
+  const [statesList, setStatesList] = useState([]);
+  const [currenciesList, setCurrenciesList] = useState([]);
+  const [languagesList, setLanguagesList] = useState([]);
+  const [timezonesList, setTimezonesList] = useState([]);
+  const [bestTimesList, setBestTimesList] = useState([]);
+  const [selectedCountryId, setSelectedCountryId] = useState("");
+  const [loadingStates, setLoadingStates] = useState(false);
+
   // Attraction Modal State
   const [attractionModalOpen, setAttractionModalOpen] = useState(false);
   const [editingAttraction, setEditingAttraction] = useState(null);
   const [editingAttractionIndex, setEditingAttractionIndex] = useState(null);
+
+  // Load all masters on mount
+  useEffect(() => {
+    let isCancelled = false;
+    const fetchMasters = async () => {
+      try {
+        const [cRes, curRes, langRes, tzRes, btRes] = await Promise.all([
+          geoApi.getCountries({ isActive: "true" }),
+          currenciesApi.getCurrencies({ isActive: "true" }),
+          languagesApi.getLanguages({ isActive: "true" }),
+          timezonesApi.getTimezones({ isActive: "true" }),
+          bestTimeApi.getBestTimes({ isActive: "true" }),
+        ]);
+        if (!isCancelled) {
+          setCountriesList(Array.isArray(cRes) ? cRes : cRes?.data || []);
+          setCurrenciesList(Array.isArray(curRes) ? curRes : curRes?.data || []);
+          setLanguagesList(Array.isArray(langRes) ? langRes : langRes?.data || []);
+          setTimezonesList(Array.isArray(tzRes) ? tzRes : tzRes?.data || []);
+          setBestTimesList(Array.isArray(btRes) ? btRes : btRes?.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to load reference masters:", err);
+      }
+    };
+    fetchMasters();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   // Load destination
   const loadDestination = useCallback(async () => {
@@ -129,6 +176,48 @@ export default function DestinationFormPage() {
     }
   }, [isEdit, loadDestination]);
 
+  // Synchronize selected country ID when formData.country or countriesList changes
+  useEffect(() => {
+    if (formData.country && countriesList.length > 0) {
+      const matched = countriesList.find(
+        (c) =>
+          c.name.toLowerCase() === formData.country.toLowerCase() ||
+          c.code.toLowerCase() === formData.country.toLowerCase()
+      );
+      if (matched && matched.id !== selectedCountryId) {
+        setSelectedCountryId(matched.id);
+      }
+    }
+  }, [formData.country, countriesList, selectedCountryId]);
+
+  // Load states whenever selectedCountryId changes
+  useEffect(() => {
+    if (!selectedCountryId) {
+      setStatesList([]);
+      return;
+    }
+    let isCancelled = false;
+    setLoadingStates(true);
+    geoApi
+      .getStates({ countryId: selectedCountryId, isActive: "true" })
+      .then((res) => {
+        if (!isCancelled) {
+          const list = Array.isArray(res) ? res : res?.data || [];
+          setStatesList(list);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load states for country:", err);
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingStates(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedCountryId]);
+
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
@@ -152,17 +241,21 @@ export default function DestinationFormPage() {
     if (errors.name) setErrors((prev) => ({ ...prev, name: null }));
   };
 
-  const handleCountryChange = (e) => {
-    const val = e.target.value;
+  const handleCountrySelect = (e) => {
+    const countryName = e.target.value;
+    const matched = countriesList.find((c) => c.name === countryName);
+    setSelectedCountryId(matched ? matched.id : "");
+
     const name = formData.name;
-    const autoSlug = `${name}-${val}`
+    const autoSlug = `${name}-${countryName}`
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
 
     setFormData((prev) => ({
       ...prev,
-      country: val,
+      country: countryName,
+      state: "", // Reset state when country changes
       slug: prev.slug && isEdit ? prev.slug : autoSlug,
     }));
     if (errors.country) setErrors((prev) => ({ ...prev, country: null }));
@@ -455,22 +548,33 @@ export default function DestinationFormPage() {
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   Country <span style={{ color: "var(--danger-500)" }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  className="form-input"
+                <select
+                  className="form-input form-select"
                   style={{
                     borderColor: errors.country ? "var(--danger-500)" : undefined,
                     boxShadow: errors.country ? "0 0 0 2px rgba(239, 68, 68, 0.2)" : undefined,
                   }}
-                  placeholder="e.g. Netherlands, France, Indonesia, UAE"
                   value={formData.country}
-                  onChange={handleCountryChange}
-                />
+                  onChange={handleCountrySelect}
+                >
+                  <option value="">Select Country</option>
+                  {countriesList.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.flagEmoji ? `${c.flagEmoji} ` : ""}{c.name} ({c.code})
+                    </option>
+                  ))}
+                  {formData.country && !countriesList.some((c) => c.name.toLowerCase() === formData.country.toLowerCase()) && (
+                    <option value={formData.country}>{formData.country} (Custom)</option>
+                  )}
+                </select>
                 {errors.country && (
                   <span style={{ color: "var(--danger-500)", fontSize: 12, marginTop: 4, display: "block" }}>
                     {errors.country}
                   </span>
                 )}
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  Loaded from Countries Master. <Link to="/countries" style={{ color: "var(--brand-600)" }}>Manage</Link>
+                </span>
               </div>
 
               {/* State */}
@@ -478,13 +582,33 @@ export default function DestinationFormPage() {
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   State / Province / Region
                 </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. North Holland, Île-de-France, Bali"
-                  value={formData.state}
+                <select
+                  className="form-input form-select"
+                  disabled={!formData.country || loadingStates}
+                  value={formData.state || ""}
                   onChange={(e) => handleChange("state", e.target.value)}
-                />
+                >
+                  <option value="">
+                    {!formData.country
+                      ? "Select Country first"
+                      : loadingStates
+                      ? "Loading states..."
+                      : statesList.length === 0
+                      ? "No states found in master (Optional)"
+                      : "Select State / Province"}
+                  </option>
+                  {statesList.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name} {s.code ? `(${s.code})` : ""}
+                    </option>
+                  ))}
+                  {formData.state && !statesList.some((s) => s.name.toLowerCase() === formData.state.toLowerCase()) && (
+                    <option value={formData.state}>{formData.state} (Custom)</option>
+                  )}
+                </select>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  States linked to {formData.country || "selected country"}. <Link to="/states" style={{ color: "var(--brand-600)" }}>Manage</Link>
+                </span>
               </div>
 
               {/* Slug */}
@@ -678,67 +802,176 @@ export default function DestinationFormPage() {
             </p>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 18 }}>
+              {/* Best Time to Visit */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   Best Time to Visit
                 </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Apr-Jun, Oct-Mar"
+                <select
+                  className="form-input form-select"
                   value={formData.bestTimeToVisit}
                   onChange={(e) => handleChange("bestTimeToVisit", e.target.value)}
-                />
+                >
+                  <option value="">Select Best Time Period</option>
+                  {bestTimesList.map((b) => (
+                    <option key={b.id} value={b.name}>
+                      {b.name} {b.season ? `(${b.season})` : ""}
+                    </option>
+                  ))}
+                  {formData.bestTimeToVisit &&
+                    !bestTimesList.some(
+                      (b) => b.name.toLowerCase() === formData.bestTimeToVisit.toLowerCase()
+                    ) && (
+                      <option value={formData.bestTimeToVisit}>
+                        {formData.bestTimeToVisit} (Custom)
+                      </option>
+                    )}
+                </select>
                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  Ideal season or months for holiday travelers
+                  Ideal season or months for holiday travelers.{" "}
+                  <Link to="/best-time-to-visit" style={{ color: "var(--brand-600)" }}>
+                    Manage Master
+                  </Link>
                 </span>
               </div>
 
+              {/* Primary Spoken Languages */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   Primary Spoken Languages
                 </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Dutch, English, French"
+                <select
+                  className="form-input form-select"
                   value={formData.language}
                   onChange={(e) => handleChange("language", e.target.value)}
-                />
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  Local and tourist languages spoken in the destination
+                >
+                  <option value="">Select Primary Language</option>
+                  {languagesList.map((l) => (
+                    <option key={l.id} value={l.name}>
+                      {l.name} {l.nativeName ? `(${l.nativeName})` : ""}
+                    </option>
+                  ))}
+                  {formData.language &&
+                    !languagesList.some(
+                      (l) => l.name.toLowerCase() === formData.language.toLowerCase()
+                    ) && (
+                      <option value={formData.language}>
+                        {formData.language} (Custom)
+                      </option>
+                    )}
+                </select>
+
+                {/* Quick selectable chips/pills for multiple languages */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                  {languagesList.slice(0, 10).map((l) => {
+                    const isSelected = (formData.language || "")
+                      .split(",")
+                      .map((s) => s.trim().toLowerCase())
+                      .includes(l.name.toLowerCase());
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={() => {
+                          const current = (formData.language || "")
+                            .split(",")
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          let next;
+                          if (current.map((c) => c.toLowerCase()).includes(l.name.toLowerCase())) {
+                            next = current.filter((c) => c.toLowerCase() !== l.name.toLowerCase());
+                          } else {
+                            next = [...current, l.name];
+                          }
+                          handleChange("language", next.join(", "));
+                        }}
+                        style={{
+                          padding: "2px 8px",
+                          fontSize: 11,
+                          borderRadius: 12,
+                          border: isSelected ? "1px solid var(--brand-500)" : "1px solid var(--border-default)",
+                          background: isSelected ? "var(--brand-50)" : "var(--bg-card)",
+                          color: isSelected ? "var(--brand-600)" : "var(--text-secondary)",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {isSelected ? "✓ " : "+ "}
+                        {l.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, display: "block" }}>
+                  Selected languages: {formData.language || "None"}.{" "}
+                  <Link to="/languages" style={{ color: "var(--brand-600)" }}>
+                    Manage Master
+                  </Link>
                 </span>
               </div>
 
+              {/* Time Zone */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   Time Zone
                 </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. CET +1, GMT +4, WITA +8"
+                <select
+                  className="form-input form-select"
                   value={formData.timeZone}
                   onChange={(e) => handleChange("timeZone", e.target.value)}
-                />
+                >
+                  <option value="">Select Time Zone</option>
+                  {timezonesList.map((t) => (
+                    <option key={t.id} value={t.code}>
+                      {t.code} — {t.name}
+                    </option>
+                  ))}
+                  {formData.timeZone &&
+                    !timezonesList.some(
+                      (t) => t.code.toLowerCase() === formData.timeZone.toLowerCase()
+                    ) && (
+                      <option value={formData.timeZone}>
+                        {formData.timeZone} (Custom)
+                      </option>
+                    )}
+                </select>
                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  Standard time zone offset for tourist clocks
+                  Standard time zone offset for tourist clocks.{" "}
+                  <Link to="/timezones" style={{ color: "var(--brand-600)" }}>
+                    Manage Master
+                  </Link>
                 </span>
               </div>
 
+              {/* Local Currency Code */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: 600 }}>
                   Local Currency Code
                 </label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. EUR, USD, AED, VND, INR"
+                <select
+                  className="form-input form-select"
                   value={formData.currencyCode}
                   onChange={(e) => handleChange("currencyCode", e.target.value)}
-                />
+                >
+                  <option value="">Select Currency</option>
+                  {currenciesList.map((c) => (
+                    <option key={c.id} value={c.code}>
+                      {c.code} ({c.symbol}) — {c.name}
+                    </option>
+                  ))}
+                  {formData.currencyCode &&
+                    !currenciesList.some(
+                      (c) => c.code.toLowerCase() === formData.currencyCode.toLowerCase()
+                    ) && (
+                      <option value={formData.currencyCode}>
+                        {formData.currencyCode} (Custom)
+                      </option>
+                    )}
+                </select>
                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  ISO 3-letter currency code
+                  ISO 3-letter currency code.{" "}
+                  <Link to="/currencies" style={{ color: "var(--brand-600)" }}>
+                    Manage Master
+                  </Link>
                 </span>
               </div>
             </div>
@@ -757,125 +990,49 @@ export default function DestinationFormPage() {
               Primary hero cover photo and high-resolution city gallery imagery
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              {/* Cover Image */}
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 600 }}>
-                  Primary Hero Cover Image URL <span style={{ color: "var(--danger-500)" }}>*</span>
-                </label>
-                <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                  <div style={{ flex: 1 }}>
-                    <input
-                      type="url"
-                      className="form-input"
-                      style={{
-                        borderColor: errors.coverImage ? "var(--danger-500)" : undefined,
-                        boxShadow: errors.coverImage ? "0 0 0 2px rgba(239, 68, 68, 0.2)" : undefined,
-                      }}
-                      placeholder="https://images.unsplash.com/photo-..."
-                      value={formData.coverImage}
-                      onChange={(e) => handleChange("coverImage", e.target.value)}
-                    />
-                    {errors.coverImage && (
-                      <span style={{ color: "var(--danger-500)", fontSize: 12, marginTop: 4, display: "block" }}>
-                        {errors.coverImage}
-                      </span>
-                    )}
-                  </div>
-                  {formData.coverImage && (
-                    <div
-                      style={{
-                        width: 140,
-                        height: 90,
-                        borderRadius: "var(--radius-md)",
-                        overflow: "hidden",
-                        border: "1px solid var(--border-default)",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <img
-                        src={formData.coverImage}
-                        alt="Hero Preview"
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      />
-                    </div>
-                  )}
-                </div>
+            <div style={{ maxWidth: 680, display: "flex", flexDirection: "column", gap: 24 }}>
+              {/* Primary Hero Cover Image */}
+              <div
+                style={{
+                  background: "var(--bg-card)",
+                  padding: "20px 22px",
+                  borderRadius: "var(--radius-lg)",
+                  border: "1px solid var(--border-default)",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+                }}
+              >
+                <ImageUpload
+                  label="Primary Hero Cover Image"
+                  required
+                  value={formData.coverImage}
+                  onChange={(url) => handleChange("coverImage", url)}
+                  error={errors.coverImage}
+                  folder="destinations"
+                  maxWidth={540}
+                  helperText="High-resolution banner photo displayed across listings and cards"
+                />
               </div>
 
               {/* Additional Photos */}
-              <div style={{ borderTop: "1px solid var(--border-default)", paddingTop: 18 }}>
-                <label className="form-label" style={{ fontWeight: 600, marginBottom: 8, display: "block" }}>
-                  Additional Destination Photos
-                </label>
-                <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-                  <input
-                    type="url"
-                    className="form-input"
-                    placeholder="Paste image URL and click Add Image"
-                    value={newImageInput}
-                    onChange={(e) => setNewImageInput(e.target.value)}
-                    style={{ flex: 1 }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddGalleryImage();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddGalleryImage}
-                    className="btn btn-secondary"
-                    style={{ display: "flex", alignItems: "center", gap: 6 }}
-                  >
-                    <Plus size={16} /> Add Image
-                  </button>
-                </div>
-
-                {formData.images.length > 0 && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 14 }}>
-                    {formData.images.map((url, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          position: "relative",
-                          height: 100,
-                          borderRadius: "var(--radius-md)",
-                          overflow: "hidden",
-                          border: "1px solid var(--border-default)",
-                        }}
-                      >
-                        <img
-                          src={url}
-                          alt={`Gallery ${idx + 1}`}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveGalleryImage(idx)}
-                          style={{
-                            position: "absolute",
-                            top: 6,
-                            right: 6,
-                            background: "rgba(239, 68, 68, 0.9)",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "var(--radius-full)",
-                            width: 24,
-                            height: 24,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div
+                style={{
+                  background: "var(--bg-card)",
+                  padding: "20px 22px",
+                  borderRadius: "var(--radius-lg)",
+                  border: "1px solid var(--border-default)",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+                }}
+              >
+                <ImageUpload
+                  label="Additional Destination Photos (Gallery)"
+                  multiple
+                  value={formData.images}
+                  onChange={(urls) => handleChange("images", urls)}
+                  folder="destinations"
+                  maxWidth={640}
+                  helperText="City sights, landmarks, and landscape photos for tourist exploration"
+                  maxFiles={12}
+                />
               </div>
             </div>
           </div>

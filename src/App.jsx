@@ -25,6 +25,10 @@ import PackageFormPage from './pages/packages/PackageFormPage.jsx';
 import CouponsListPage from './pages/coupons/CouponsListPage.jsx';
 import CountriesMasterPage from './pages/masters/CountriesMasterPage.jsx';
 import StatesMasterPage from './pages/masters/StatesMasterPage.jsx';
+import CurrenciesMasterPage from './pages/masters/CurrenciesMasterPage.jsx';
+import LanguagesMasterPage from './pages/masters/LanguagesMasterPage.jsx';
+import TimezonesMasterPage from './pages/masters/TimezonesMasterPage.jsx';
+import BestTimeMasterPage from './pages/masters/BestTimeMasterPage.jsx';
 import Support from './pages/Support.jsx';
 import Payments from './pages/Payments.jsx';
 import Staff from './pages/Staff.jsx';
@@ -82,9 +86,13 @@ function AdminShell() {
             <Route path="support"      element={<Support />} />
             <Route path="payments"     element={<Payments />} />
             <Route path="contacts"     element={<Contacts />} />
-            <Route path="countries"    element={<CountriesMasterPage />} />
-            <Route path="states"       element={<StatesMasterPage />} />
-            <Route path="locations"    element={<Navigate to="/countries" replace />} />
+            <Route path="countries"          element={<CountriesMasterPage />} />
+            <Route path="states"             element={<StatesMasterPage />} />
+            <Route path="currencies"         element={<CurrenciesMasterPage />} />
+            <Route path="languages"          element={<LanguagesMasterPage />} />
+            <Route path="timezones"          element={<TimezonesMasterPage />} />
+            <Route path="best-time-to-visit" element={<BestTimeMasterPage />} />
+            <Route path="locations"          element={<Navigate to="/countries" replace />} />
             <Route path="settings"     element={<Settings />} />
             <Route path="*"            element={<Navigate to="/dashboard" replace />} />
           </Routes>

@@ -2,7 +2,8 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Plane, Hotel, Car, Package, Map,
   MessageSquare, BarChart2, FileText, Bell, Headphones,
-  Settings, CreditCard, Phone, ChevronRight, LogOut, Activity, Shield, Compass, CheckSquare, Ticket, Globe, MapPin
+  Settings, CreditCard, Phone, ChevronRight, LogOut, Activity, Shield, Compass, CheckSquare, Ticket, Globe, MapPin,
+  Coins, Languages, Clock, Calendar
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 
@@ -59,9 +60,13 @@ const NAV_GROUPS = [
   {
     label: 'Config & Masters',
     items: [
-      { to: '/countries',  label: 'Countries Master', icon: Globe },
-      { to: '/states',     label: 'States Master',    icon: MapPin },
-      { to: '/settings',   label: 'Settings',         icon: Settings },
+      { to: '/countries',          label: 'Countries Master',    icon: Globe },
+      { to: '/states',             label: 'States Master',       icon: MapPin },
+      { to: '/currencies',         label: 'Currencies Master',   icon: Coins },
+      { to: '/languages',          label: 'Languages Master',    icon: Languages },
+      { to: '/timezones',          label: 'Time Zones Master',   icon: Clock },
+      { to: '/best-time-to-visit', label: 'Best Time to Visit',  icon: Calendar },
+      { to: '/settings',           label: 'Settings',            icon: Settings },
     ],
   },
 ];

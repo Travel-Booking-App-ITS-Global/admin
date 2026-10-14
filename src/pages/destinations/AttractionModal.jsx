@@ -12,6 +12,7 @@ import {
   Sparkles,
   Loader2,
 } from "lucide-react";
+import { ImageUpload } from "../../components/ui/index.jsx";
 
 export default function AttractionModal({
   isOpen,
@@ -409,124 +410,33 @@ export default function AttractionModal({
             )}
           </div>
 
-          {/* Hero Cover Image URL */}
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label" style={{ fontWeight: 600 }}>
-              Hero Cover Image URL <span style={{ color: "var(--danger-500)" }}>*</span>
-            </label>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <input
-                type="text"
-                className="form-input"
-                style={{
-                  flex: 1,
-                  borderColor: errors.coverImage ? "var(--danger-500)" : undefined,
-                  boxShadow: errors.coverImage ? "0 0 0 2px rgba(239, 68, 68, 0.2)" : undefined,
-                }}
-                placeholder="https://images.unsplash.com/..."
-                value={formData.coverImage}
-                onChange={(e) => {
-                  setFormData({ ...formData, coverImage: e.target.value });
-                  if (errors.coverImage) setErrors((prev) => ({ ...prev, coverImage: null }));
-                }}
-              />
-              {formData.coverImage && (
-                <img
-                  src={formData.coverImage}
-                  alt="Preview"
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 6,
-                    objectFit: "cover",
-                    border: "1px solid var(--border-default)",
-                    flexShrink: 0,
-                  }}
-                  onError={(e) => (e.currentTarget.style.display = "none")}
-                />
-              )}
-            </div>
-            {errors.coverImage && (
-              <span style={{ color: "var(--danger-500)", fontSize: 12, marginTop: 4 }}>
-                {errors.coverImage}
-              </span>
-            )}
+          {/* Hero Cover Image */}
+          <div style={{ marginTop: 4 }}>
+            <ImageUpload
+              label="Hero Cover Image"
+              required
+              value={formData.coverImage}
+              onChange={(url) => {
+                setFormData((prev) => ({ ...prev, coverImage: url }));
+                if (errors.coverImage) setErrors((prev) => ({ ...prev, coverImage: null }));
+              }}
+              error={errors.coverImage}
+              folder="destinations/attractions"
+              helperText="Primary photo displayed on attraction card"
+            />
           </div>
 
           {/* Photos Gallery */}
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label" style={{ fontWeight: 600 }}>
-              Photos Gallery
-            </label>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <input
-                type="text"
-                className="form-input"
-                style={{ flex: 1 }}
-                placeholder="Paste photo image URL and click Add"
-                value={newPhotoInput}
-                onChange={(e) => setNewPhotoInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleAddPhoto();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleAddPhoto}
-                style={{ flexShrink: 0 }}
-              >
-                <Plus size={14} style={{ marginRight: 4 }} /> Add Photo
-              </button>
-            </div>
-
-            {formData.photos.length > 0 && (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-                {formData.photos.map((url, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      position: "relative",
-                      width: 60,
-                      height: 60,
-                      borderRadius: 6,
-                      overflow: "hidden",
-                      border: "1px solid var(--border-default)",
-                    }}
-                  >
-                    <img
-                      src={url}
-                      alt={`Photo ${idx + 1}`}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePhoto(idx)}
-                      style={{
-                        position: "absolute",
-                        top: 3,
-                        right: 3,
-                        background: "rgba(239, 68, 68, 0.9)",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "var(--radius-full)",
-                        width: 18,
-                        height: 18,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div style={{ marginTop: 4 }}>
+            <ImageUpload
+              label="Photos Gallery"
+              multiple
+              value={formData.photos}
+              onChange={(urls) => setFormData((prev) => ({ ...prev, photos: urls }))}
+              folder="destinations/attractions"
+              helperText="Additional scenic photos for this attraction"
+              maxFiles={8}
+            />
           </div>
         </form>
 

@@ -801,13 +801,13 @@ export const onboardingApi = {
 };
 
 export const uploadApi = {
-  async uploadImage(file, folder = 'onboarding') {
+  async uploadImage(file, folder = 'destinations') {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('folder', folder);
 
     const token = localStorage.getItem(TOKEN_KEY);
-    const url = `${API_BASE_URL}/admin/upload/image`;
+    const url = `${API_BASE_URL}/upload/image`;
 
     const res = await fetch(url, {
       method: 'POST',
@@ -819,13 +819,18 @@ export const uploadApi = {
 
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.message || 'Image upload failed');
+      throw new Error(data?.message || data?.error || 'Image upload failed');
     }
     return data?.data || data;
   },
 
-  async uploadBase64(base64Data, folder = 'onboarding') {
-    const res = await apiRequest('/admin/upload/base64', {
+  async uploadMultiple(files, folder = 'destinations') {
+    const fileList = Array.isArray(files) ? files : Array.from(files);
+    return Promise.all(fileList.map((f) => this.uploadImage(f, folder)));
+  },
+
+  async uploadBase64(base64Data, folder = 'destinations') {
+    const res = await apiRequest('/upload/base64', {
       method: 'POST',
       body: JSON.stringify({ image: base64Data, folder }),
     });
@@ -1107,6 +1112,163 @@ export const geoApi = {
 
   async deleteState(id) {
     const res = await apiRequest(`/geo/states/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+export const currenciesApi = {
+  async getCurrencies(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.isActive !== undefined && params.isActive !== 'All') q.append('isActive', params.isActive);
+    if (params.isPopular !== undefined && params.isPopular !== 'All') q.append('isPopular', params.isPopular);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/masters/currencies${queryString}`);
+    return res?.data || res;
+  },
+
+  async getCurrencyById(id) {
+    const res = await apiRequest(`/masters/currencies/${id}`);
+    return res?.data || res;
+  },
+
+  async createCurrency(data) {
+    const res = await apiRequest('/masters/currencies', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateCurrency(id, data) {
+    const res = await apiRequest(`/masters/currencies/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteCurrency(id) {
+    const res = await apiRequest(`/masters/currencies/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+export const languagesApi = {
+  async getLanguages(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.isActive !== undefined && params.isActive !== 'All') q.append('isActive', params.isActive);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/masters/languages${queryString}`);
+    return res?.data || res;
+  },
+
+  async getLanguageById(id) {
+    const res = await apiRequest(`/masters/languages/${id}`);
+    return res?.data || res;
+  },
+
+  async createLanguage(data) {
+    const res = await apiRequest('/masters/languages', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateLanguage(id, data) {
+    const res = await apiRequest(`/masters/languages/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteLanguage(id) {
+    const res = await apiRequest(`/masters/languages/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+export const timezonesApi = {
+  async getTimezones(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.isActive !== undefined && params.isActive !== 'All') q.append('isActive', params.isActive);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/masters/timezones${queryString}`);
+    return res?.data || res;
+  },
+
+  async getTimezoneById(id) {
+    const res = await apiRequest(`/masters/timezones/${id}`);
+    return res?.data || res;
+  },
+
+  async createTimezone(data) {
+    const res = await apiRequest('/masters/timezones', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateTimezone(id, data) {
+    const res = await apiRequest(`/masters/timezones/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteTimezone(id) {
+    const res = await apiRequest(`/masters/timezones/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
+export const bestTimeApi = {
+  async getBestTimes(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.isActive !== undefined && params.isActive !== 'All') q.append('isActive', params.isActive);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/masters/best-time-to-visit${queryString}`);
+    return res?.data || res;
+  },
+
+  async getBestTimeById(id) {
+    const res = await apiRequest(`/masters/best-time-to-visit/${id}`);
+    return res?.data || res;
+  },
+
+  async createBestTime(data) {
+    const res = await apiRequest('/masters/best-time-to-visit', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateBestTime(id, data) {
+    const res = await apiRequest(`/masters/best-time-to-visit/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteBestTime(id) {
+    const res = await apiRequest(`/masters/best-time-to-visit/${id}`, {
       method: 'DELETE',
     });
     return res?.data || res;
