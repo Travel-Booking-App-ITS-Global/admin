@@ -1036,6 +1036,83 @@ export const destinationsApi = {
   },
 };
 
+export const geoApi = {
+  async getCountries(params = {}) {
+    const q = new URLSearchParams();
+    if (params.search) q.append('search', params.search);
+    if (params.isActive !== undefined && params.isActive !== 'All') q.append('isActive', params.isActive);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/geo/countries${queryString}`);
+    return res?.data || res;
+  },
+
+  async getCountryById(id) {
+    const res = await apiRequest(`/geo/countries/${id}`);
+    return res?.data || res;
+  },
+
+  async createCountry(data) {
+    const res = await apiRequest('/geo/countries', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateCountry(id, data) {
+    const res = await apiRequest(`/geo/countries/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteCountry(id) {
+    const res = await apiRequest(`/geo/countries/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+
+  async getStates(params = {}) {
+    const q = new URLSearchParams();
+    if (params.countryId) q.append('countryId', params.countryId);
+    if (params.search) q.append('search', params.search);
+    if (params.isActive !== undefined && params.isActive !== 'All') q.append('isActive', params.isActive);
+    const queryString = q.toString() ? `?${q.toString()}` : '';
+    const res = await apiRequest(`/geo/states${queryString}`);
+    return res?.data || res;
+  },
+
+  async getStateById(id) {
+    const res = await apiRequest(`/geo/states/${id}`);
+    return res?.data || res;
+  },
+
+  async createState(data) {
+    const res = await apiRequest('/geo/states', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async updateState(id, data) {
+    const res = await apiRequest(`/geo/states/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    return res?.data || res;
+  },
+
+  async deleteState(id) {
+    const res = await apiRequest(`/geo/states/${id}`, {
+      method: 'DELETE',
+    });
+    return res?.data || res;
+  },
+};
+
 export const packagesApi = {
   async getStats() {
     const res = await apiRequest('/admin/packages/stats');

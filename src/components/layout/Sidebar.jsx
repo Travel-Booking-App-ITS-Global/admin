@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Plane, Hotel, Car, Package, Map,
   MessageSquare, BarChart2, FileText, Bell, Headphones,
-  Settings, CreditCard, Phone, ChevronRight, LogOut, Activity, Shield, Compass, CheckSquare, Ticket
+  Settings, CreditCard, Phone, ChevronRight, LogOut, Activity, Shield, Compass, CheckSquare, Ticket, Globe, MapPin
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 
@@ -57,9 +57,11 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: 'Config',
+    label: 'Config & Masters',
     items: [
-      { to: '/settings',   label: 'Settings',        icon: Settings },
+      { to: '/countries',  label: 'Countries Master', icon: Globe },
+      { to: '/states',     label: 'States Master',    icon: MapPin },
+      { to: '/settings',   label: 'Settings',         icon: Settings },
     ],
   },
 ];
